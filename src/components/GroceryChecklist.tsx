@@ -68,49 +68,30 @@ export function GroceryChecklist() {
   const totalCount = items.length;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <Card className="p-6 bg-gradient-card shadow-elegant border-0">
-        <div className="text-center space-y-2">
-          <h2 className="text-2xl font-bold text-primary">Smart Grocery List</h2>
-          <p className="text-muted-foreground">AI-curated items for your perfect shopping trip</p>
-          <div className="flex items-center justify-center gap-2 mt-4">
-            <div className="text-lg font-semibold text-primary">{checkedCount}</div>
-            <div className="text-muted-foreground">of</div>
-            <div className="text-lg font-semibold">{totalCount}</div>
-            <div className="text-muted-foreground">completed</div>
-          </div>
-          <div className="w-full bg-muted rounded-full h-2 mt-2">
-            <div 
-              className="bg-gradient-primary h-2 rounded-full transition-all duration-500"
-              style={{ width: `${totalCount > 0 ? (checkedCount / totalCount) * 100 : 0}%` }}
-            />
-          </div>
-        </div>
-      </Card>
+    <div className="space-y-4">
 
       {/* Add new item */}
-      <Card className="p-4 shadow-card">
+      <Card className="p-3 shadow-card">
         <div className="flex gap-2">
           <Input
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             placeholder="Add a new item..."
             onKeyPress={(e) => e.key === 'Enter' && addItem()}
-            className="flex-1"
+            className="flex-1 h-9"
           />
-          <Button onClick={addItem} variant="default" size="icon">
+          <Button onClick={addItem} variant="default" size="sm">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </Card>
 
       {/* Grocery items */}
-      <div className="space-y-2">
+      <div className="space-y-1">
         {items.map((item) => (
           <Card 
             key={item.id} 
-            className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant group ${
+            className={`p-3 shadow-card transition-all duration-300 hover:shadow-elegant group ${
               item.checked ? 'bg-accent/50' : 'bg-card'
             }`}
           >
@@ -118,7 +99,7 @@ export function GroceryChecklist() {
               <div className="flex items-center gap-3 flex-1">
                 <button
                   onClick={() => toggleItem(item.id)}
-                  className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
                     item.checked 
                       ? 'bg-primary border-primary shadow-glow' 
                       : 'border-border hover:border-primary'
@@ -128,14 +109,14 @@ export function GroceryChecklist() {
                     <Check className="h-3 w-3 text-primary-foreground animate-check-bounce" />
                   )}
                 </button>
-                <div className="flex-1">
-                  <div className={`font-medium transition-all duration-200 ${
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium transition-all duration-200 text-sm ${
                     item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
                   }`}>
                     {item.name}
                   </div>
                   {item.category && (
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-xs text-muted-foreground">
                       {item.category}
                     </div>
                   )}
@@ -143,11 +124,11 @@ export function GroceryChecklist() {
               </div>
               <Button
                 variant="ghost"
-                size="icon"
+                size="sm"
                 onClick={() => removeItem(item.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-8 w-8 p-0"
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3 w-3" />
               </Button>
             </div>
           </Card>
@@ -155,7 +136,7 @@ export function GroceryChecklist() {
       </div>
 
       {items.length === 0 && (
-        <Card className="p-8 text-center shadow-card">
+        <Card className="p-6 text-center shadow-card">
           <div className="text-muted-foreground">
             Your grocery list is empty. Add some items above!
           </div>
