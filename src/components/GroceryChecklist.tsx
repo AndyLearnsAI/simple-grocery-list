@@ -1,32 +1,58 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Check, Plus, Trash2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface GroceryItem {
-  id: string;
-  name: string;
-  checked: boolean;
-  category?: string;
+  id: number;
+  Item: string;
+  checked?: boolean;
+  Quantity?: number;
+  Price?: number;
+  Discount?: number;
 }
 
-const SAMPLE_ITEMS: GroceryItem[] = [
-  { id: "1", name: "Fresh spinach", checked: false, category: "Vegetables" },
-  { id: "2", name: "Organic eggs", checked: false, category: "Dairy" },
-  { id: "3", name: "Whole grain bread", checked: false, category: "Bakery" },
-  { id: "4", name: "Greek yogurt", checked: true, category: "Dairy" },
-  { id: "5", name: "Bananas", checked: false, category: "Fruits" },
-  { id: "6", name: "Olive oil", checked: false, category: "Pantry" },
-];
-
 export function GroceryChecklist() {
-  const [items, setItems] = useState<GroceryItem[]>(SAMPLE_ITEMS);
+  const [items, setItems] = useState<GroceryItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newItem, setNewItem] = useState("");
   const { toast } = useToast();
 
-  const toggleItem = (id: string) => {
+  // Fetch items from Supabase
+  useEffect(() => {
+    fetchItems();
+  }, []);
+
+  const fetchItems = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('Grocery list')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const formattedItems = data?.map(item => ({
+        ...item,
+        checked: false // Add checked state since it's not in the database
+      })) || [];
+
+      setItems(formattedItems);
+    } catch (error) {
+      toast({
+        title: "Error loading items",
+        description: "Failed to load grocery list from database",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleItem = (id: number) => {
     setItems(prev => 
       prev.map(item => 
         item.id === id ? { ...item, checked: !item.checked } : item
@@ -34,31 +60,64 @@ export function GroceryChecklist() {
     );
   };
 
-  const addItem = () => {
+  const addItem = async () => {
     if (!newItem.trim()) return;
     
-    const item: GroceryItem = {
-      id: Date.now().toString(),
-      name: newItem.trim(),
-      checked: false,
-      category: "Custom"
-    };
-    
-    setItems(prev => [...prev, item]);
-    setNewItem("");
-    toast({
-      title: "Item added!",
-      description: `${item.name} added to your grocery list`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from('Grocery list')
+        .insert([
+          {
+            Item: newItem.trim(),
+            user_id: (await supabase.auth.getUser()).data.user?.id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newGroceryItem = { ...data, checked: false };
+        setItems(prev => [newGroceryItem, ...prev]);
+        setNewItem("");
+        toast({
+          title: "Item added!",
+          description: `${data.Item} added to your grocery list`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error adding item",
+        description: "Failed to add item to database",
+        variant: "destructive",
+      });
+    }
   };
 
-  const removeItem = (id: string) => {
+  const removeItem = async (id: number) => {
     const item = items.find(i => i.id === id);
-    setItems(prev => prev.filter(item => item.id !== id));
-    if (item) {
+    
+    try {
+      const { error } = await supabase
+        .from('Grocery list')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setItems(prev => prev.filter(item => item.id !== id));
+      if (item) {
+        toast({
+          title: "Item removed",
+          description: `${item.Item} removed from your list`,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
       toast({
-        title: "Item removed",
-        description: `${item.name} removed from your list`,
+        title: "Error removing item",
+        description: "Failed to remove item from database",
         variant: "destructive",
       });
     }
@@ -113,11 +172,11 @@ export function GroceryChecklist() {
                   <div className={`font-medium transition-all duration-200 text-sm ${
                     item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
                   }`}>
-                    {item.name}
+                    {item.Item}
                   </div>
-                  {item.category && (
+                  {item.Quantity && (
                     <div className="text-xs text-muted-foreground">
-                      {item.category}
+                      Qty: {item.Quantity}
                     </div>
                   )}
                 </div>

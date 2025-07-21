@@ -14,7 +14,63 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      "Grocery list": {
+        Row: {
+          created_at: string
+          Discount: number | null
+          id: number
+          Item: string
+          Price: number | null
+          Quantity: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          Discount?: number | null
+          id?: number
+          Item: string
+          Price?: number | null
+          Quantity?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          Discount?: number | null
+          id?: number
+          Item?: string
+          Price?: number | null
+          Quantity?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      "Recurring staples": {
+        Row: {
+          created_at: string
+          Discount: number | null
+          id: number
+          Item: string
+          Price: number | null
+          Quantity: number | null
+        }
+        Insert: {
+          created_at?: string
+          Discount?: number | null
+          id?: number
+          Item: string
+          Price?: number | null
+          Quantity?: number | null
+        }
+        Update: {
+          created_at?: string
+          Discount?: number | null
+          id?: number
+          Item?: string
+          Price?: number | null
+          Quantity?: number | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
