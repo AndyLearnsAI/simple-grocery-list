@@ -35,12 +35,15 @@ export function GroceryChecklist() {
 
       if (error) throw error;
 
+      console.log('Fetched items:', data); // Debug log
+
       const formattedItems = data?.map(item => ({
         ...item,
         checked: false // Add checked state since it's not in the database
       })) || [];
 
       setItems(formattedItems);
+      console.log('Set items:', formattedItems); // Debug log
     } catch (error) {
       toast({
         title: "Error loading items",
@@ -125,6 +128,16 @@ export function GroceryChecklist() {
 
   const checkedCount = items.filter(item => item.checked).length;
   const totalCount = items.length;
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <Card className="p-6 text-center shadow-card">
+          <div className="text-muted-foreground">Loading your grocery list...</div>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
