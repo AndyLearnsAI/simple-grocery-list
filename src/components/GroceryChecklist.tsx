@@ -141,10 +141,6 @@ export function GroceryChecklist() {
 
   return (
     <div className="space-y-4">
-      {/* Debug info - remove this later */}
-      <div className="text-xs text-muted-foreground">
-        Items count: {items.length} | Loading: {loading.toString()}
-      </div>
 
       {/* Add new item */}
       <Card className="p-3 shadow-card">
