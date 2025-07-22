@@ -3,12 +3,15 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { GroceryChecklist } from "@/components/GroceryChecklist";
-import { ShoppingCart, LogOut } from "lucide-react";
+import { PurchaseHistory } from "@/components/PurchaseHistory";
+import { ShoppingCart, LogOut, History } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState("grocery-list");
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,9 +91,40 @@ const Index = () => {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-6 max-w-2xl">
-        <div className="animate-fade-in">
-          <GroceryChecklist />
-        </div>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+          {/* Tab Navigation */}
+          <TabsList className="grid w-full grid-cols-2 bg-card shadow-card border">
+            <TabsTrigger 
+              value="grocery-list" 
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              <span className="hidden sm:inline">Grocery List</span>
+              <span className="sm:hidden">List</span>
+            </TabsTrigger>
+            <TabsTrigger 
+              value="purchase-history"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">Purchase History</span>
+              <span className="sm:hidden">History</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Tab Content */}
+          <TabsContent value="grocery-list" className="space-y-0">
+            <div className="animate-fade-in">
+              <GroceryChecklist />
+            </div>
+          </TabsContent>
+
+          <TabsContent value="purchase-history" className="space-y-0">
+            <div className="animate-fade-in">
+              <PurchaseHistory />
+            </div>
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

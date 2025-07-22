@@ -17,57 +17,75 @@ export type Database = {
       "Grocery list": {
         Row: {
           created_at: string
-          Discount: number | null
           id: number
           Item: string
-          Price: number | null
-          Quantity: number | null
+          Quantity: number
           user_id: string | null
         }
         Insert: {
           created_at?: string
-          Discount?: number | null
           id?: number
           Item: string
-          Price?: number | null
-          Quantity?: number | null
+          Quantity?: number
           user_id?: string | null
         }
         Update: {
           created_at?: string
-          Discount?: number | null
           id?: number
           Item?: string
-          Price?: number | null
-          Quantity?: number | null
+          Quantity?: number
           user_id?: string | null
         }
         Relationships: []
       }
-      "Recurring staples": {
+      "Purchase history": {
         Row: {
           created_at: string
-          Discount: number | null
           id: number
           Item: string
-          Price: number | null
-          Quantity: number | null
+          last_bought: string
+          Quantity: number
+          user_id: string | null
         }
         Insert: {
           created_at?: string
-          Discount?: number | null
           id?: number
           Item: string
-          Price?: number | null
-          Quantity?: number | null
+          last_bought?: string
+          Quantity?: number
+          user_id?: string | null
         }
         Update: {
           created_at?: string
-          Discount?: number | null
           id?: number
           Item?: string
-          Price?: number | null
-          Quantity?: number | null
+          last_bought?: string
+          Quantity?: number
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      Staples: {
+        Row: {
+          created_at: string
+          id: number
+          Item: string
+          Quantity: number
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          Item: string
+          Quantity?: number
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          Item?: string
+          Quantity?: number
+          user_id?: string | null
         }
         Relationships: []
       }

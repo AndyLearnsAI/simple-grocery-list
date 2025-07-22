@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Plus, Trash2 } from "lucide-react";
+import { Check, Plus, Trash2, Undo2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,18 @@ interface GroceryItem {
   Quantity?: number;
   Price?: number;
   Discount?: number;
+  user_id?: string;
+}
+
+interface DeletedItem extends GroceryItem {
+  deletedAt: number;
 }
 
 export function GroceryChecklist() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItem, setNewItem] = useState("");
+  const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedItem | null>(null);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -55,12 +61,61 @@ export function GroceryChecklist() {
     }
   };
 
-  const toggleItem = (id: number) => {
-    setItems(prev => 
-      prev.map(item => 
-        item.id === id ? { ...item, checked: !item.checked } : item
-      )
-    );
+  const toggleItem = async (id: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    if (!item.checked) {
+      // Mark as checked and move to purchase history
+      try {
+        const user = await supabase.auth.getUser();
+        if (!user.data.user) return;
+
+        // Add to purchase history
+        const { error: historyError } = await supabase
+          .from('Purchase history')
+          .insert([
+            {
+              Item: item.Item,
+              Quantity: item.Quantity || 1,
+              user_id: user.data.user.id,
+              last_bought: new Date().toISOString()
+            }
+          ]);
+
+        if (historyError) throw historyError;
+
+        // Remove from grocery list
+        const { error: deleteError } = await supabase
+          .from('Grocery list')
+          .delete()
+          .eq('id', id);
+
+        if (deleteError) throw deleteError;
+
+        // Update local state
+        setItems(prev => prev.filter(i => i.id !== id));
+        
+        toast({
+          title: "Item purchased!",
+          description: `${item.Item} moved to purchase history`,
+        });
+
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to mark item as purchased",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Just toggle locally if unchecking
+      setItems(prev => 
+        prev.map(i => 
+          i.id === id ? { ...i, checked: !i.checked } : i
+        )
+      );
+    }
   };
 
   const addItem = async () => {
@@ -100,6 +155,7 @@ export function GroceryChecklist() {
 
   const removeItem = async (id: number) => {
     const item = items.find(i => i.id === id);
+    if (!item) return;
     
     try {
       const { error } = await supabase
@@ -109,18 +165,66 @@ export function GroceryChecklist() {
 
       if (error) throw error;
 
-      setItems(prev => prev.filter(item => item.id !== id));
-      if (item) {
-        toast({
-          title: "Item removed",
-          description: `${item.Item} removed from your list`,
-          variant: "destructive",
-        });
-      }
+      // Store for undo functionality
+      setRecentlyDeleted({
+        ...item,
+        deletedAt: Date.now()
+      });
+
+      // Clear undo after 5 seconds
+      setTimeout(() => {
+        setRecentlyDeleted(null);
+      }, 5000);
+
+      setItems(prev => prev.filter(i => i.id !== id));
+      toast({
+        title: "Item removed",
+        description: `${item.Item} removed from your list`,
+        variant: "destructive",
+      });
     } catch (error) {
       toast({
         title: "Error removing item",
         description: "Failed to remove item from database",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const undoDelete = async () => {
+    if (!recentlyDeleted) return;
+
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      const { data, error } = await supabase
+        .from('Grocery list')
+        .insert([
+          {
+            Item: recentlyDeleted.Item,
+            Quantity: recentlyDeleted.Quantity || 1,
+            user_id: user.data.user.id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        const newItem = { ...data, checked: false };
+        setItems(prev => [newItem, ...prev]);
+        setRecentlyDeleted(null);
+        toast({
+          title: "Item restored",
+          description: `${data.Item} added back to your list`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: "Error restoring item",
+        description: "Failed to restore item",
         variant: "destructive",
       });
     }
@@ -141,6 +245,25 @@ export function GroceryChecklist() {
 
   return (
     <div className="space-y-4">
+      {/* Undo delete button */}
+      {recentlyDeleted && (
+        <Card className="p-3 shadow-card border-destructive/50 bg-destructive/5">
+          <div className="flex items-center justify-between">
+            <div className="text-sm text-foreground">
+              Deleted "{recentlyDeleted.Item}"
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={undoDelete}
+              className="h-8"
+            >
+              <Undo2 className="h-3 w-3 mr-1" />
+              Undo
+            </Button>
+          </div>
+        </Card>
+      )}
 
       {/* Add new item */}
       <Card className="p-3 shadow-card">
