@@ -18,6 +18,8 @@ interface GroceryItem {
 
 interface DeletedItem extends GroceryItem {
   deletedAt: number;
+  action: 'deleted' | 'purchased';
+  purchaseHistoryId?: number;
 }
 
 export function GroceryChecklist() {
@@ -72,7 +74,7 @@ export function GroceryChecklist() {
         if (!user.data.user) return;
 
         // Add to purchase history
-        const { error: historyError } = await supabase
+        const { data: historyData, error: historyError } = await supabase
           .from('Purchase history')
           .insert([
             {
@@ -81,7 +83,9 @@ export function GroceryChecklist() {
               user_id: user.data.user.id,
               last_bought: new Date().toISOString()
             }
-          ]);
+          ])
+          .select()
+          .single();
 
         if (historyError) throw historyError;
 
@@ -92,6 +96,19 @@ export function GroceryChecklist() {
           .eq('id', id);
 
         if (deleteError) throw deleteError;
+
+        // Store for undo functionality
+        setRecentlyDeleted({
+          ...item,
+          deletedAt: Date.now(),
+          action: 'purchased',
+          purchaseHistoryId: historyData?.id
+        });
+
+        // Clear undo after 5 seconds
+        setTimeout(() => {
+          setRecentlyDeleted(null);
+        }, 5000);
 
         // Update local state
         setItems(prev => prev.filter(i => i.id !== id));
@@ -168,7 +185,8 @@ export function GroceryChecklist() {
       // Store for undo functionality
       setRecentlyDeleted({
         ...item,
-        deletedAt: Date.now()
+        deletedAt: Date.now(),
+        action: 'deleted'
       });
 
       // Clear undo after 5 seconds
@@ -198,28 +216,65 @@ export function GroceryChecklist() {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
 
-      const { data, error } = await supabase
-        .from('Grocery list')
-        .insert([
-          {
-            Item: recentlyDeleted.Item,
-            Quantity: recentlyDeleted.Quantity || 1,
-            user_id: user.data.user.id
-          }
-        ])
-        .select()
-        .single();
+      if (recentlyDeleted.action === 'purchased') {
+        // Undo purchase: remove from purchase history and add back to grocery list
+        if (recentlyDeleted.purchaseHistoryId) {
+          const { error: deleteHistoryError } = await supabase
+            .from('Purchase history')
+            .delete()
+            .eq('id', recentlyDeleted.purchaseHistoryId);
 
-      if (error) throw error;
+          if (deleteHistoryError) throw deleteHistoryError;
+        }
 
-      if (data) {
-        const newItem = { ...data, checked: false };
-        setItems(prev => [newItem, ...prev]);
-        setRecentlyDeleted(null);
-        toast({
-          title: "Item restored",
-          description: `${data.Item} added back to your list`,
-        });
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: recentlyDeleted.Item,
+              Quantity: recentlyDeleted.Quantity || 1,
+              user_id: user.data.user.id
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newItem = { ...data, checked: false };
+          setItems(prev => [newItem, ...prev]);
+          setRecentlyDeleted(null);
+          toast({
+            title: "Purchase undone",
+            description: `${data.Item} moved back to grocery list`,
+          });
+        }
+      } else {
+        // Undo delete: add back to grocery list
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: recentlyDeleted.Item,
+              Quantity: recentlyDeleted.Quantity || 1,
+              user_id: user.data.user.id
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newItem = { ...data, checked: false };
+          setItems(prev => [newItem, ...prev]);
+          setRecentlyDeleted(null);
+          toast({
+            title: "Item restored",
+            description: `${data.Item} added back to your list`,
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -250,7 +305,9 @@ export function GroceryChecklist() {
         <Card className="p-3 shadow-card border-destructive/50 bg-destructive/5">
           <div className="flex items-center justify-between">
             <div className="text-sm text-foreground">
-              Deleted "{recentlyDeleted.Item}"
+              {recentlyDeleted.action === 'purchased' 
+                ? `Purchased "${recentlyDeleted.Item}"` 
+                : `Deleted "${recentlyDeleted.Item}"`}
             </div>
             <Button
               variant="outline"
