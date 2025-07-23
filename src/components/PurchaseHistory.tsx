@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Calendar, Package } from "lucide-react";
+import { Calendar, Package, Undo2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -39,6 +40,48 @@ export function PurchaseHistory() {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const restoreToGroceryList = async (item: PurchaseItem) => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      // Add back to grocery list
+      const { error: groceryError } = await supabase
+        .from('Grocery list')
+        .insert([
+          {
+            Item: item.Item,
+            Quantity: item.Quantity,
+            user_id: user.data.user.id
+          }
+        ]);
+
+      if (groceryError) throw groceryError;
+
+      // Remove from purchase history
+      const { error: deleteError } = await supabase
+        .from('Purchase history')
+        .delete()
+        .eq('id', item.id);
+
+      if (deleteError) throw deleteError;
+
+      // Update local state
+      setItems(prev => prev.filter(i => i.id !== item.id));
+
+      toast({
+        title: "Item restored",
+        description: `${item.Item} moved back to grocery list`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error restoring item",
+        description: "Failed to restore item to grocery list",
+        variant: "destructive",
+      });
     }
   };
 
@@ -98,11 +141,22 @@ export function PurchaseHistory() {
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-xs text-muted-foreground">Last bought</div>
-                <div className="text-sm font-medium text-foreground">
-                  {formatDate(item.last_bought)}
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground">Last bought</div>
+                  <div className="text-sm font-medium text-foreground">
+                    {formatDate(item.last_bought)}
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => restoreToGroceryList(item)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Restore to grocery list"
+                >
+                  <Undo2 className="h-4 w-4" />
+                </Button>
               </div>
             </div>
           </Card>
