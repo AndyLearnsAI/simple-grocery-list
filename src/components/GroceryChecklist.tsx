@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Plus, Trash2, Undo2 } from "lucide-react";
+import { Check, Plus, Trash2, Undo2, Minus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +34,14 @@ export function GroceryChecklist() {
     item: GroceryItem | null;
     actionType: 'purchase' | 'delete';
   }>({ isOpen: false, item: null, actionType: 'purchase' });
+  const [swipeState, setSwipeState] = useState<{
+    [key: number]: { 
+      startX: number; 
+      currentX: number; 
+      isDragging: boolean;
+      direction: 'left' | 'right' | null;
+    }
+  }>({});
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -286,6 +294,128 @@ export function GroceryChecklist() {
     }
   };
 
+  const updateQuantity = async (id: number, change: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    const newQuantity = Math.max(1, (item.Quantity || 1) + change);
+    
+    try {
+      const { error } = await supabase
+        .from('Grocery list')
+        .update({ Quantity: newQuantity })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setItems(prev => prev.map(i => 
+        i.id === id ? { ...i, Quantity: newQuantity } : i
+      ));
+
+    } catch (error) {
+      toast({
+        title: "Error updating quantity",
+        description: "Failed to update item quantity",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent, itemId: number) => {
+    const touch = e.touches[0];
+    setSwipeState(prev => ({
+      ...prev,
+      [itemId]: {
+        startX: touch.clientX,
+        currentX: touch.clientX,
+        isDragging: true,
+        direction: null
+      }
+    }));
+  };
+
+  const handleTouchMove = (e: React.TouchEvent, itemId: number) => {
+    const touch = e.touches[0];
+    const state = swipeState[itemId];
+    if (!state?.isDragging) return;
+
+    const deltaX = touch.clientX - state.startX;
+    const direction = deltaX < -50 ? 'left' : deltaX > 50 ? 'right' : null;
+
+    setSwipeState(prev => ({
+      ...prev,
+      [itemId]: {
+        ...state,
+        currentX: touch.clientX,
+        direction
+      }
+    }));
+  };
+
+  const handleTouchEnd = (itemId: number) => {
+    const state = swipeState[itemId];
+    if (!state?.isDragging) return;
+
+    const deltaX = state.currentX - state.startX;
+    
+    // Reset swipe state
+    setSwipeState(prev => ({
+      ...prev,
+      [itemId]: {
+        startX: 0,
+        currentX: 0,
+        isDragging: false,
+        direction: null
+      }
+    }));
+
+    // Execute action based on swipe distance
+    if (Math.abs(deltaX) > 100) {
+      if (deltaX < 0) {
+        // Left swipe - delete
+        removeItem(itemId);
+      } else {
+        // Right swipe - purchase
+        toggleItem(itemId);
+      }
+    }
+  };
+
+  const getSwipeStyle = (itemId: number) => {
+    const state = swipeState[itemId];
+    if (!state?.isDragging) return {};
+
+    const deltaX = state.currentX - state.startX;
+    const clampedDelta = Math.max(-150, Math.min(150, deltaX));
+    
+    return {
+      transform: `translateX(${clampedDelta}px)`,
+      transition: 'none'
+    };
+  };
+
+  const getSwipeIndicator = (itemId: number) => {
+    const state = swipeState[itemId];
+    if (!state?.isDragging) return null;
+
+    const deltaX = state.currentX - state.startX;
+    if (Math.abs(deltaX) < 50) return null;
+
+    if (deltaX < 0) {
+      return (
+        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-destructive opacity-70">
+          <Trash2 className="h-5 w-5" />
+        </div>
+      );
+    } else {
+      return (
+        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-primary opacity-70">
+          <Check className="h-5 w-5" />
+        </div>
+      );
+    }
+  };
+
   const undoDelete = async () => {
     if (!recentlyDeleted) return;
 
@@ -457,49 +587,74 @@ export function GroceryChecklist() {
       {/* Grocery items */}
       <div className="space-y-1">
         {items.map((item) => (
-          <Card 
-            key={item.id} 
-            className={`p-3 shadow-card transition-all duration-300 hover:shadow-elegant group ${
-              item.checked ? 'bg-accent/50' : 'bg-card'
-            }`}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
-                <button
-                  onClick={() => toggleItem(item.id)}
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                    item.checked 
-                      ? 'bg-primary border-primary shadow-glow' 
-                      : 'border-border hover:border-primary'
-                  }`}
-                >
-                  {item.checked && (
-                    <Check className="h-3 w-3 text-primary-foreground animate-check-bounce" />
-                  )}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <div className={`font-medium transition-all duration-200 text-sm ${
-                    item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-                  }`}>
-                    {item.Item}
-                  </div>
-                  {item.Quantity && (
-                    <div className="text-xs text-muted-foreground">
-                      Qty: {item.Quantity}
+          <div key={item.id} className="relative overflow-hidden">
+            {getSwipeIndicator(item.id)}
+            <Card 
+              className={`p-3 shadow-card transition-all duration-300 hover:shadow-elegant group relative ${
+                item.checked ? 'bg-accent/50' : 'bg-card'
+              }`}
+              style={getSwipeStyle(item.id)}
+              onTouchStart={(e) => handleTouchStart(e, item.id)}
+              onTouchMove={(e) => handleTouchMove(e, item.id)}
+              onTouchEnd={() => handleTouchEnd(item.id)}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1">
+                  <button
+                    onClick={() => toggleItem(item.id)}
+                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
+                      item.checked 
+                        ? 'bg-primary border-primary shadow-glow' 
+                        : 'border-border hover:border-primary'
+                    }`}
+                  >
+                    {item.checked && (
+                      <Check className="h-3 w-3 text-primary-foreground animate-check-bounce" />
+                    )}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-medium transition-all duration-200 text-sm ${
+                      item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+                    }`}>
+                      {item.Item}
                     </div>
-                  )}
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateQuantity(item.id, -1)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                          disabled={(item.Quantity || 1) <= 1}
+                        >
+                          <Minus className="h-3 w-3" />
+                        </Button>
+                        <span className="text-xs text-muted-foreground min-w-[20px] text-center">
+                          {item.Quantity || 1}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => updateQuantity(item.id, 1)}
+                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeItem(item.id)}
+                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-8 w-8 p-0"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => removeItem(item.id)}
-                className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-8 w-8 p-0"
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          </Card>
+            </Card>
+          </div>
         ))}
       </div>
 
