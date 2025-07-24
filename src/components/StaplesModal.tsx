@@ -21,7 +21,7 @@ interface SelectedStaple extends StaplesItem {
 interface StaplesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onItemsAdded: (addedItems: { item: string; quantity: number }[]) => void;
+  onItemsAdded: (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => void;
 }
 
 export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProps) {
@@ -93,9 +93,10 @@ export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProp
         user_id: item.user_id
       }));
 
-      const { error } = await supabase
+      const { data: insertedData, error } = await supabase
         .from('Grocery list')
-        .insert(itemsToAdd);
+        .insert(itemsToAdd)
+        .select('id');
 
       if (error) throw error;
 
@@ -105,7 +106,9 @@ export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProp
         quantity: item.selectedQuantity
       }));
 
-      onItemsAdded(addedItems);
+      const addedItemIds = insertedData?.map(item => item.id) || [];
+
+      onItemsAdded({ items: addedItems, addedItemIds });
       onClose();
 
       toast({

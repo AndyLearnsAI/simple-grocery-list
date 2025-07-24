@@ -20,9 +20,11 @@ interface GroceryItem {
 
 interface DeletedItem extends GroceryItem {
   deletedAt: number;
-  action: 'deleted' | 'purchased';
+  action: 'deleted' | 'purchased' | 'added-saved';
   purchaseHistoryId?: number;
   originalQuantity?: number;
+  addedItemIds?: number[];
+  addedItems?: { item: string; quantity: number }[];
 }
 
 export function GroceryChecklist() {
@@ -479,6 +481,25 @@ export function GroceryChecklist() {
           title: "Purchase undone",
           description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} moved back to grocery list`,
         });
+      } else if (recentlyDeleted.action === 'added-saved') {
+        // Undo added saved items: remove the specific items that were added
+        if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
+          const { error } = await supabase
+            .from('Grocery list')
+            .delete()
+            .in('id', recentlyDeleted.addedItemIds);
+
+          if (error) throw error;
+
+          // Update local state to remove the items
+          setItems(prev => prev.filter(item => !recentlyDeleted.addedItemIds!.includes(item.id)));
+        }
+
+        setRecentlyDeleted(null);
+        toast({
+          title: "Saved items removed",
+          description: `${recentlyDeleted.addedItems?.length || 0} saved items removed from grocery list`,
+        });
       } else {
         // Undo delete: check if item still exists and update quantity or add new
         const existingItem = items.find(i => i.Item === recentlyDeleted.Item);
@@ -533,16 +554,23 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleStaplesItemsAdded = (addedItems: { item: string; quantity: number }[]) => {
+  const handleStaplesItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
     setRecentlyDeleted({
-      ...addedItems[0], // Use first item as base
       id: Date.now(),
-      Item: `${addedItems.length} items`,
-      Quantity: addedItems.reduce((sum, item) => sum + item.quantity, 0),
+      Item: `${addedData.items.length} saved items`,
+      Quantity: addedData.items.reduce((sum, item) => sum + item.quantity, 0),
       deletedAt: Date.now(),
-      action: 'purchased',
+      action: 'added-saved',
+      addedItemIds: addedData.addedItemIds,
+      addedItems: addedData.items,
       user_id: ''
     } as DeletedItem);
+    
+    // Clear undo after 5 seconds
+    setTimeout(() => {
+      setRecentlyDeleted(null);
+    }, 5000);
+    
     fetchItems(); // Refresh the list
   };
 
@@ -568,6 +596,8 @@ export function GroceryChecklist() {
             <div className="text-sm text-foreground">
               {recentlyDeleted.action === 'purchased' 
                 ? `Purchased "${recentlyDeleted.Item}"` 
+                : recentlyDeleted.action === 'added-saved'
+                ? `Added ${recentlyDeleted.Item}`
                 : `Deleted "${recentlyDeleted.Item}"`}
             </div>
             <Button
