@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { QuantitySelector } from "./QuantitySelector";
+import { StaplesModal } from "./StaplesModal";
 
 interface GroceryItem {
   id: number;
@@ -42,6 +43,7 @@ export function GroceryChecklist() {
       direction: 'left' | 'right' | null;
     }
   }>({});
+  const [staplesModalOpen, setStaplesModalOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -531,6 +533,19 @@ export function GroceryChecklist() {
     }
   };
 
+  const handleStaplesItemsAdded = (addedItems: { item: string; quantity: number }[]) => {
+    setRecentlyDeleted({
+      ...addedItems[0], // Use first item as base
+      id: Date.now(),
+      Item: `${addedItems.length} items`,
+      Quantity: addedItems.reduce((sum, item) => sum + item.quantity, 0),
+      deletedAt: Date.now(),
+      action: 'purchased',
+      user_id: ''
+    } as DeletedItem);
+    fetchItems(); // Refresh the list
+  };
+
   const checkedCount = items.filter(item => item.checked).length;
   const totalCount = items.length;
 
@@ -580,6 +595,13 @@ export function GroceryChecklist() {
           />
           <Button onClick={addItem} variant="default" size="sm">
             <Plus className="h-4 w-4" />
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setStaplesModalOpen(true)}
+          >
+            Add Saved Items
           </Button>
         </div>
       </Card>
@@ -682,6 +704,13 @@ export function GroceryChecklist() {
         itemName={quantitySelector.item?.Item || ''}
         maxQuantity={quantitySelector.item?.Quantity || 1}
         actionType={quantitySelector.actionType}
+      />
+
+      {/* Staples Modal */}
+      <StaplesModal
+        isOpen={staplesModalOpen}
+        onClose={() => setStaplesModalOpen(false)}
+        onItemsAdded={handleStaplesItemsAdded}
       />
     </div>
   );
