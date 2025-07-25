@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { QuantitySelector } from "./QuantitySelector";
 import { StaplesModal } from "./StaplesModal";
+import { EditStaplesModal } from "./EditStaplesModal";
 
 interface GroceryItem {
   id: number;
@@ -46,6 +47,7 @@ export function GroceryChecklist() {
     }
   }>({});
   const [staplesModalOpen, setStaplesModalOpen] = useState(false);
+  const [editStaplesModalOpen, setEditStaplesModalOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -87,17 +89,7 @@ export function GroceryChecklist() {
     if (!item) return;
 
     if (!item.checked) {
-      // Check if quantity > 1, if so show quantity selector
-      if ((item.Quantity || 1) > 1) {
-        setQuantitySelector({
-          isOpen: true,
-          item,
-          actionType: 'purchase'
-        });
-        return;
-      }
-
-      // Process single quantity item directly
+      // Process the full quantity directly
       await processPurchase(item, item.Quantity || 1);
     } else {
       // Just toggle locally if unchecking
@@ -187,31 +179,66 @@ export function GroceryChecklist() {
     }
   };
 
+  // Helper function for case-insensitive item comparison
+  const normalizeItemName = (name: string) => name.toLowerCase().trim();
+
   const addItem = async () => {
     if (!newItem.trim()) return;
     
     try {
-      const { data, error } = await supabase
-        .from('Grocery list')
-        .insert([
-          {
-            Item: newItem.trim(),
-            user_id: (await supabase.auth.getUser()).data.user?.id
-          }
-        ])
-        .select()
-        .single();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      if (error) throw error;
+      const normalizedNewItem = normalizeItemName(newItem);
+      
+      // Check for existing item (case-insensitive)
+      const existingItem = items.find(item => 
+        normalizeItemName(item.Item) === normalizedNewItem
+      );
 
-      if (data) {
-        const newGroceryItem = { ...data, checked: false };
-        setItems(prev => [newGroceryItem, ...prev]);
+      if (existingItem) {
+        // Update existing item quantity
+        const newQuantity = (existingItem.Quantity || 1) + 1;
+        const { error } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: newQuantity })
+          .eq('id', existingItem.id);
+
+        if (error) throw error;
+
+        setItems(prev => prev.map(i => 
+          i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
+        ));
+
         setNewItem("");
         toast({
-          title: "Item added!",
-          description: `${data.Item} added to your grocery list`,
+          title: "Quantity updated!",
+          description: `${existingItem.Item} quantity increased to ${newQuantity}`,
         });
+      } else {
+        // Add new item
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: newItem.trim(),
+              user_id: user.id
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newGroceryItem = { ...data, checked: false };
+          setItems(prev => [newGroceryItem, ...prev]);
+          setNewItem("");
+          toast({
+            title: "Item added!",
+            description: `${data.Item} added to your grocery list`,
+          });
+        }
       }
     } catch (error) {
       toast({
@@ -226,17 +253,7 @@ export function GroceryChecklist() {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    // Check if quantity > 1, if so show quantity selector
-    if ((item.Quantity || 1) > 1) {
-      setQuantitySelector({
-        isOpen: true,
-        item,
-        actionType: 'delete'
-      });
-      return;
-    }
-
-    // Process single quantity item directly
+    // Process the full quantity directly
     await processDelete(item, item.Quantity || 1);
   };
 
@@ -438,8 +455,8 @@ export function GroceryChecklist() {
           if (deleteHistoryError) throw deleteHistoryError;
         }
 
-        // Check if the original item still exists in grocery list
-        const existingItem = items.find(i => i.Item === recentlyDeleted.Item);
+        // Check if the original item still exists in grocery list (case-insensitive)
+        const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
         
         if (existingItem) {
           // Update the existing item's quantity
@@ -501,8 +518,8 @@ export function GroceryChecklist() {
           description: `${recentlyDeleted.addedItems?.length || 0} saved items removed from grocery list`,
         });
       } else {
-        // Undo delete: check if item still exists and update quantity or add new
-        const existingItem = items.find(i => i.Item === recentlyDeleted.Item);
+        // Undo delete: check if item still exists and update quantity or add new (case-insensitive)
+        const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
         
         if (existingItem) {
           // Update the existing item's quantity
@@ -615,7 +632,7 @@ export function GroceryChecklist() {
 
       {/* Add new item */}
       <Card className="p-3 shadow-card">
-        <div className="flex gap-2">
+        <div className="flex gap-2 mb-3">
           <Input
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
@@ -626,12 +643,25 @@ export function GroceryChecklist() {
           <Button onClick={addItem} variant="default" size="sm">
             <Plus className="h-4 w-4" />
           </Button>
+        </div>
+        
+        {/* Saved items management */}
+        <div className="flex gap-2 pt-3 border-t">
           <Button 
             variant="outline" 
             size="sm"
             onClick={() => setStaplesModalOpen(true)}
+            className="flex-1"
           >
             Add Saved Items
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => setEditStaplesModalOpen(true)}
+            className="flex-1"
+          >
+            Edit Saved Items
           </Button>
         </div>
       </Card>
@@ -718,29 +748,20 @@ export function GroceryChecklist() {
         </Card>
       )}
 
-      {/* Quantity Selector Dialog */}
-      <QuantitySelector
-        isOpen={quantitySelector.isOpen}
-        onClose={() => setQuantitySelector({ isOpen: false, item: null, actionType: 'purchase' })}
-        onConfirm={(quantity) => {
-          if (quantitySelector.item) {
-            if (quantitySelector.actionType === 'purchase') {
-              processPurchase(quantitySelector.item, quantity);
-            } else {
-              processDelete(quantitySelector.item, quantity);
-            }
-          }
-        }}
-        itemName={quantitySelector.item?.Item || ''}
-        maxQuantity={quantitySelector.item?.Quantity || 1}
-        actionType={quantitySelector.actionType}
-      />
-
       {/* Staples Modal */}
       <StaplesModal
         isOpen={staplesModalOpen}
         onClose={() => setStaplesModalOpen(false)}
         onItemsAdded={handleStaplesItemsAdded}
+      />
+
+      {/* Edit Staples Modal */}
+      <EditStaplesModal
+        isOpen={editStaplesModalOpen}
+        onClose={() => setEditStaplesModalOpen(false)}
+        onStaplesUpdated={() => {
+          // Could refresh saved items if needed
+        }}
       />
     </div>
   );

@@ -101,8 +101,13 @@ export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProp
       const itemsToUpdate = [];
       const addedItemIds = [];
 
+      // Helper function for case-insensitive comparison
+      const normalizeItemName = (name: string) => name.toLowerCase().trim();
+
       for (const item of selectedItems) {
-        const existingItem = existingItems?.find(existing => existing.Item === item.Item);
+        const existingItem = existingItems?.find(existing => 
+          normalizeItemName(existing.Item) === normalizeItemName(item.Item)
+        );
         
         if (existingItem) {
           // Update existing item quantity
