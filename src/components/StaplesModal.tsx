@@ -47,7 +47,7 @@ export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProp
 
       const staplesWithSelection = data?.map(item => ({
         ...item,
-        selectedQuantity: 0
+        selectedQuantity: item.Quantity // Use the saved quantity as default
       })) || [];
 
       setStaples(staplesWithSelection);
