@@ -86,27 +86,68 @@ export function StaplesModal({ isOpen, onClose, onItemsAdded }: StaplesModalProp
     }
 
     try {
-      // Add items to grocery list
-      const itemsToAdd = selectedItems.map(item => ({
-        Item: item.Item,
-        Quantity: item.selectedQuantity,
-        user_id: item.user_id
-      }));
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
 
-      const { data: insertedData, error } = await supabase
+      // Get current grocery list to check for existing items
+      const { data: existingItems, error: fetchError } = await supabase
         .from('Grocery list')
-        .insert(itemsToAdd)
-        .select('id');
+        .select('*')
+        .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (fetchError) throw fetchError;
+
+      const itemsToInsert = [];
+      const itemsToUpdate = [];
+      const addedItemIds = [];
+
+      for (const item of selectedItems) {
+        const existingItem = existingItems?.find(existing => existing.Item === item.Item);
+        
+        if (existingItem) {
+          // Update existing item quantity
+          itemsToUpdate.push({
+            id: existingItem.id,
+            newQuantity: existingItem.Quantity + item.selectedQuantity
+          });
+          addedItemIds.push(existingItem.id);
+        } else {
+          // Insert new item
+          itemsToInsert.push({
+            Item: item.Item,
+            Quantity: item.selectedQuantity,
+            user_id: item.user_id
+          });
+        }
+      }
+
+      // Update existing items
+      for (const update of itemsToUpdate) {
+        const { error: updateError } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: update.newQuantity })
+          .eq('id', update.id);
+
+        if (updateError) throw updateError;
+      }
+
+      // Insert new items
+      if (itemsToInsert.length > 0) {
+        const { data: insertedData, error: insertError } = await supabase
+          .from('Grocery list')
+          .insert(itemsToInsert)
+          .select('id');
+
+        if (insertError) throw insertError;
+        
+        addedItemIds.push(...(insertedData?.map(item => item.id) || []));
+      }
 
       // Prepare data for undo functionality
       const addedItems = selectedItems.map(item => ({
         item: item.Item,
         quantity: item.selectedQuantity
       }));
-
-      const addedItemIds = insertedData?.map(item => item.id) || [];
 
       onItemsAdded({ items: addedItems, addedItemIds });
       onClose();
