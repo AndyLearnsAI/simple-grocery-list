@@ -4,7 +4,6 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { QuantitySelector } from "./QuantitySelector";
 
 interface PurchaseItem {
   id: number;
@@ -17,10 +16,6 @@ interface PurchaseItem {
 export function PurchaseHistory() {
   const [items, setItems] = useState<PurchaseItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [quantitySelector, setQuantitySelector] = useState<{
-    isOpen: boolean;
-    item: PurchaseItem | null;
-  }>({ isOpen: false, item: null });
   const { toast } = useToast();
 
   useEffect(() => {
@@ -49,16 +44,7 @@ export function PurchaseHistory() {
   };
 
   const restoreToGroceryList = async (item: PurchaseItem) => {
-    // Check if quantity > 1, if so show quantity selector
-    if (item.Quantity > 1) {
-      setQuantitySelector({
-        isOpen: true,
-        item
-      });
-      return;
-    }
-
-    // Process single quantity item directly
+    // Process the full quantity directly
     await processRestore(item, item.Quantity);
   };
 
@@ -67,14 +53,21 @@ export function PurchaseHistory() {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
 
-      // Check if item already exists in grocery list
-      const { data: existingItems, error: fetchError } = await supabase
+      // Helper function for case-insensitive comparison
+      const normalizeItemName = (name: string) => name.toLowerCase().trim();
+
+      // Check if item already exists in grocery list (case-insensitive)
+      const { data: allItems, error: fetchError } = await supabase
         .from('Grocery list')
         .select('*')
-        .eq('Item', item.Item)
         .eq('user_id', user.data.user.id);
 
       if (fetchError) throw fetchError;
+
+      // Find existing item using case-insensitive comparison
+      const existingItems = allItems?.filter(existingItem => 
+        normalizeItemName(existingItem.Item) === normalizeItemName(item.Item)
+      ) || [];
 
       if (existingItems && existingItems.length > 0) {
         // Update existing item quantity
@@ -229,19 +222,6 @@ export function PurchaseHistory() {
         </Card>
       )}
 
-      {/* Quantity Selector Dialog */}
-      <QuantitySelector
-        isOpen={quantitySelector.isOpen}
-        onClose={() => setQuantitySelector({ isOpen: false, item: null })}
-        onConfirm={(quantity) => {
-          if (quantitySelector.item) {
-            processRestore(quantitySelector.item, quantity);
-          }
-        }}
-        itemName={quantitySelector.item?.Item || ''}
-        maxQuantity={quantitySelector.item?.Quantity || 1}
-        actionType="restore"
-      />
     </div>
   );
 }
