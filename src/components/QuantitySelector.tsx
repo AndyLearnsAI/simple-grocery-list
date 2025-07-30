@@ -33,7 +33,6 @@ export function QuantitySelector({
   const getActionText = () => {
     switch (actionType) {
       case 'purchase': return 'mark as purchased';
-      case 'delete': return 'delete';
       case 'restore': return 'restore';
       default: return 'process';
     }

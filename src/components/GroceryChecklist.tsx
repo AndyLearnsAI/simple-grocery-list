@@ -1,13 +1,14 @@
 import { useState, useEffect } from "react";
-import { Check, Plus, Trash2, Undo2, Minus } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { SavedlistModal } from "./SavedlistModal";
+import { EditSavedlistModal } from "./EditSavedlistModal";
+import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
-import { StaplesModal } from "./StaplesModal";
-import { EditStaplesModal } from "./EditStaplesModal";
 
 interface GroceryItem {
   id: number;
@@ -21,7 +22,7 @@ interface GroceryItem {
 
 interface DeletedItem extends GroceryItem {
   deletedAt: number;
-  action: 'deleted' | 'purchased' | 'added-saved';
+  action: 'deleted' | 'purchased' | 'added-saved' | 'added-specials';
   purchaseHistoryId?: number;
   originalQuantity?: number;
   addedItemIds?: number[];
@@ -36,7 +37,7 @@ export function GroceryChecklist() {
   const [quantitySelector, setQuantitySelector] = useState<{
     isOpen: boolean;
     item: GroceryItem | null;
-    actionType: 'purchase' | 'delete';
+    actionType: 'purchase';
   }>({ isOpen: false, item: null, actionType: 'purchase' });
   const [swipeState, setSwipeState] = useState<{
     [key: number]: { 
@@ -46,8 +47,9 @@ export function GroceryChecklist() {
       direction: 'left' | 'right' | null;
     }
   }>({});
-  const [staplesModalOpen, setStaplesModalOpen] = useState(false);
-  const [editStaplesModalOpen, setEditStaplesModalOpen] = useState(false);
+  const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
+  const [editSavedlistModalOpen, setEditSavedlistModalOpen] = useState(false);
+  const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -104,7 +106,16 @@ export function GroceryChecklist() {
   const processPurchase = async (item: GroceryItem, selectedQuantity: number) => {
     try {
       const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
+      if (!user.data.user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to mark items as purchased",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('Processing purchase for item:', item.Item, 'quantity:', selectedQuantity);
 
       // Add to purchase history
       const { data: historyData, error: historyError } = await supabase
@@ -120,8 +131,154 @@ export function GroceryChecklist() {
         .select()
         .single();
 
-      if (historyError) throw historyError;
+      if (historyError) {
+        console.error('Purchase history insert error:', historyError);
+        throw new Error(`Failed to add to purchase history: ${historyError.message}`);
+      }
 
+      console.log('Successfully added to purchase history:', historyData);
+
+      const remainingQuantity = (item.Quantity || 1) - selectedQuantity;
+
+      if (remainingQuantity <= 0) {
+        // Remove from grocery list entirely
+        const { error: deleteError } = await supabase
+          .from('Grocery list')
+          .delete()
+          .eq('id', item.id);
+
+        if (deleteError) {
+          console.error('Grocery list delete error:', deleteError);
+          throw new Error(`Failed to remove from grocery list: ${deleteError.message}`);
+        }
+
+        // Update local state - remove item
+        setItems(prev => prev.filter(i => i.id !== item.id));
+      } else {
+        // Update quantity in grocery list
+        const { error: updateError } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: remainingQuantity })
+          .eq('id', item.id);
+
+        if (updateError) {
+          console.error('Grocery list update error:', updateError);
+          throw new Error(`Failed to update grocery list: ${updateError.message}`);
+        }
+
+        // Update local state - update quantity
+        setItems(prev => prev.map(i => 
+          i.id === item.id ? { ...i, Quantity: remainingQuantity } : i
+        ));
+      }
+
+      // Store for undo functionality
+      setRecentlyDeleted({
+        ...item,
+        Quantity: selectedQuantity,
+        deletedAt: Date.now(),
+        action: 'purchased',
+        purchaseHistoryId: historyData?.id,
+        originalQuantity: item.Quantity || 1
+      });
+
+      // Clear undo after 5 seconds
+      setTimeout(() => {
+        setRecentlyDeleted(null);
+      }, 5000);
+      
+      toast({
+        title: "Item purchased!",
+        description: `${selectedQuantity} ${item.Item} moved to purchase history`,
+      });
+
+    } catch (error) {
+      console.error('Process purchase error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to mark item as purchased';
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Helper function for case-insensitive item comparison
+  const normalizeItemName = (name: string) => name.toLowerCase().trim();
+
+  const addItem = async () => {
+    if (!newItem.trim()) return;
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const normalizedNewItem = normalizeItemName(newItem);
+      
+      // Check for existing item (case-insensitive)
+      const existingItem = items.find(item => 
+        normalizeItemName(item.Item) === normalizedNewItem
+      );
+
+      if (existingItem) {
+        // Update existing item quantity
+        const newQuantity = (existingItem.Quantity || 0) + 1;
+        const { error: updateError } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: newQuantity })
+          .eq('id', existingItem.id);
+
+        if (updateError) throw updateError;
+
+        setItems(prev => prev.map(i => 
+          i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
+        ));
+      } else {
+        // Add new item
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: newItem.trim(),
+              Quantity: 1,
+              user_id: user.id
+            }
+          ])
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          const newItemWithChecked = { ...data, checked: false };
+          setItems(prev => [newItemWithChecked, ...prev]);
+        }
+      }
+
+      setNewItem("");
+      toast({
+        title: "Item added!",
+        description: `${newItem.trim()} added to grocery list`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error adding item",
+        description: "Failed to add item to grocery list",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const removeItem = async (id: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+
+    // Always delete the full quantity
+    await processDelete(item, item.Quantity || 1);
+  };
+
+  const processDelete = async (item: GroceryItem, selectedQuantity: number) => {
+    try {
       const remainingQuantity = (item.Quantity || 1) - selectedQuantity;
 
       if (remainingQuantity <= 0) {
@@ -155,143 +312,6 @@ export function GroceryChecklist() {
         ...item,
         Quantity: selectedQuantity,
         deletedAt: Date.now(),
-        action: 'purchased',
-        purchaseHistoryId: historyData?.id,
-        originalQuantity: item.Quantity || 1
-      });
-
-      // Clear undo after 5 seconds
-      setTimeout(() => {
-        setRecentlyDeleted(null);
-      }, 5000);
-      
-      toast({
-        title: "Item purchased!",
-        description: `${selectedQuantity} ${item.Item} moved to purchase history`,
-      });
-
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to mark item as purchased",
-        variant: "destructive",
-      });
-    }
-  };
-
-  // Helper function for case-insensitive item comparison
-  const normalizeItemName = (name: string) => name.toLowerCase().trim();
-
-  const addItem = async () => {
-    if (!newItem.trim()) return;
-    
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('User not authenticated');
-
-      const normalizedNewItem = normalizeItemName(newItem);
-      
-      // Check for existing item (case-insensitive)
-      const existingItem = items.find(item => 
-        normalizeItemName(item.Item) === normalizedNewItem
-      );
-
-      if (existingItem) {
-        // Update existing item quantity
-        const newQuantity = (existingItem.Quantity || 1) + 1;
-        const { error } = await supabase
-          .from('Grocery list')
-          .update({ Quantity: newQuantity })
-          .eq('id', existingItem.id);
-
-        if (error) throw error;
-
-        setItems(prev => prev.map(i => 
-          i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
-        ));
-
-        setNewItem("");
-        toast({
-          title: "Quantity updated!",
-          description: `${existingItem.Item} quantity increased to ${newQuantity}`,
-        });
-      } else {
-        // Add new item
-        const { data, error } = await supabase
-          .from('Grocery list')
-          .insert([
-            {
-              Item: newItem.trim(),
-              user_id: user.id
-            }
-          ])
-          .select()
-          .single();
-
-        if (error) throw error;
-
-        if (data) {
-          const newGroceryItem = { ...data, checked: false };
-          setItems(prev => [newGroceryItem, ...prev]);
-          setNewItem("");
-          toast({
-            title: "Item added!",
-            description: `${data.Item} added to your grocery list`,
-          });
-        }
-      }
-    } catch (error) {
-      toast({
-        title: "Error adding item",
-        description: "Failed to add item to database",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const removeItem = async (id: number) => {
-    const item = items.find(i => i.id === id);
-    if (!item) return;
-
-    // Process the full quantity directly
-    await processDelete(item, item.Quantity || 1);
-  };
-
-  const processDelete = async (item: GroceryItem, selectedQuantity: number) => {
-    try {
-      const remainingQuantity = (item.Quantity || 1) - selectedQuantity;
-
-      if (remainingQuantity <= 0) {
-        // Remove from grocery list entirely
-        const { error } = await supabase
-          .from('Grocery list')
-          .delete()
-          .eq('id', item.id);
-
-        if (error) throw error;
-
-        // Update local state - remove item
-        setItems(prev => prev.filter(i => i.id !== item.id));
-      } else {
-        // Update quantity in grocery list
-        const { error: updateError } = await supabase
-          .from('Grocery list')
-          .update({ Quantity: remainingQuantity })
-          .eq('id', item.id);
-
-        if (updateError) throw updateError;
-
-        // Update local state - update quantity
-        setItems(prev => prev.map(i => 
-          i.id === item.id ? { ...i, Quantity: remainingQuantity } : i
-        ));
-      }
-
-      // Store for undo functionality
-      setRecentlyDeleted({
-        ...item,
-        Quantity: selectedQuantity,
-        deletedAt: Date.now(),
         action: 'deleted',
         originalQuantity: item.Quantity || 1
       });
@@ -300,16 +320,16 @@ export function GroceryChecklist() {
       setTimeout(() => {
         setRecentlyDeleted(null);
       }, 5000);
-
+      
       toast({
-        title: "Item removed",
-        description: `${selectedQuantity} ${item.Item} removed from your list`,
-        variant: "destructive",
+        title: "Item removed!",
+        description: `${selectedQuantity} ${item.Item} removed from grocery list`,
       });
+
     } catch (error) {
       toast({
-        title: "Error removing item",
-        description: "Failed to remove item from database",
+        title: "Error",
+        description: "Failed to remove item from grocery list",
         variant: "destructive",
       });
     }
@@ -320,7 +340,7 @@ export function GroceryChecklist() {
     if (!item) return;
 
     const newQuantity = Math.max(1, (item.Quantity || 1) + change);
-    
+
     try {
       const { error } = await supabase
         .from('Grocery list')
@@ -332,7 +352,6 @@ export function GroceryChecklist() {
       setItems(prev => prev.map(i => 
         i.id === id ? { ...i, Quantity: newQuantity } : i
       ));
-
     } catch (error) {
       toast({
         title: "Error updating quantity",
@@ -343,12 +362,11 @@ export function GroceryChecklist() {
   };
 
   const handleTouchStart = (e: React.TouchEvent, itemId: number) => {
-    const touch = e.touches[0];
     setSwipeState(prev => ({
       ...prev,
       [itemId]: {
-        startX: touch.clientX,
-        currentX: touch.clientX,
+        startX: e.touches[0].clientX,
+        currentX: e.touches[0].clientX,
         isDragging: true,
         direction: null
       }
@@ -356,19 +374,18 @@ export function GroceryChecklist() {
   };
 
   const handleTouchMove = (e: React.TouchEvent, itemId: number) => {
-    const touch = e.touches[0];
     const state = swipeState[itemId];
     if (!state?.isDragging) return;
 
-    const deltaX = touch.clientX - state.startX;
-    const direction = deltaX < -50 ? 'left' : deltaX > 50 ? 'right' : null;
+    const currentX = e.touches[0].clientX;
+    const deltaX = currentX - state.startX;
 
     setSwipeState(prev => ({
       ...prev,
       [itemId]: {
         ...state,
-        currentX: touch.clientX,
-        direction
+        currentX,
+        direction: deltaX < 0 ? 'left' : deltaX > 0 ? 'right' : null
       }
     }));
   };
@@ -495,30 +512,11 @@ export function GroceryChecklist() {
 
         setRecentlyDeleted(null);
         toast({
-          title: "Purchase undone",
-          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} moved back to grocery list`,
+          title: "Purchase undone!",
+          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} restored to grocery list`,
         });
-      } else if (recentlyDeleted.action === 'added-saved') {
-        // Undo added saved items: remove the specific items that were added
-        if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
-          const { error } = await supabase
-            .from('Grocery list')
-            .delete()
-            .in('id', recentlyDeleted.addedItemIds);
-
-          if (error) throw error;
-
-          // Update local state to remove the items
-          setItems(prev => prev.filter(item => !recentlyDeleted.addedItemIds!.includes(item.id)));
-        }
-
-        setRecentlyDeleted(null);
-        toast({
-          title: "Saved items removed",
-          description: `${recentlyDeleted.addedItems?.length || 0} saved items removed from grocery list`,
-        });
-      } else {
-        // Undo delete: check if item still exists and update quantity or add new (case-insensitive)
+      } else if (recentlyDeleted.action === 'deleted') {
+        // Undo delete: restore to grocery list
         const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
         
         if (existingItem) {
@@ -558,41 +556,96 @@ export function GroceryChecklist() {
 
         setRecentlyDeleted(null);
         toast({
-          title: "Item restored",
-          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} added back to your list`,
+          title: "Delete undone!",
+          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} restored to grocery list`,
         });
-      }
+             } else if (recentlyDeleted.action === 'added-saved') {
+         // Undo saved items addition: remove added items
+         if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
+           const { error: deleteError } = await supabase
+             .from('Grocery list')
+             .delete()
+             .in('id', recentlyDeleted.addedItemIds);
+
+           if (deleteError) throw deleteError;
+
+           setItems(prev => prev.filter(i => !recentlyDeleted.addedItemIds?.includes(i.id)));
+         }
+
+         setRecentlyDeleted(null);
+         toast({
+           title: "Addition undone!",
+           description: "Saved items removed from grocery list",
+         });
+       } else if (recentlyDeleted.action === 'added-specials') {
+         // Undo specials items addition: remove added items
+         if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
+           const { error: deleteError } = await supabase
+             .from('Grocery list')
+             .delete()
+             .in('id', recentlyDeleted.addedItemIds);
+
+           if (deleteError) throw deleteError;
+
+           setItems(prev => prev.filter(i => !recentlyDeleted.addedItemIds?.includes(i.id)));
+         }
+
+         setRecentlyDeleted(null);
+         toast({
+           title: "Addition undone!",
+           description: "Specials items removed from grocery list",
+         });
+       }
     } catch (error) {
       toast({
-        title: "Error restoring item",
-        description: "Failed to restore item",
+        title: "Error undoing action",
+        description: "Failed to undo the last action",
         variant: "destructive",
       });
     }
   };
 
-  const handleStaplesItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
+  const handleSavedlistItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
+    // Store for undo functionality
     setRecentlyDeleted({
       id: Date.now(),
-      Item: `${addedData.items.length} saved items`,
-      Quantity: addedData.items.reduce((sum, item) => sum + item.quantity, 0),
+      Item: '',
+      Quantity: 0,
       deletedAt: Date.now(),
       action: 'added-saved',
       addedItemIds: addedData.addedItemIds,
-      addedItems: addedData.items,
-      user_id: ''
-    } as DeletedItem);
-    
+      addedItems: addedData.items
+    });
+
     // Clear undo after 5 seconds
     setTimeout(() => {
       setRecentlyDeleted(null);
     }, 5000);
-    
-    fetchItems(); // Refresh the list
+
+    // Refresh items to show newly added ones
+    fetchItems();
   };
 
-  const checkedCount = items.filter(item => item.checked).length;
-  const totalCount = items.length;
+  const handleSpecialsItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
+    // Store for undo functionality
+    setRecentlyDeleted({
+      id: Date.now(),
+      Item: '',
+      Quantity: 0,
+      deletedAt: Date.now(),
+      action: 'added-specials',
+      addedItemIds: addedData.addedItemIds,
+      addedItems: addedData.items
+    });
+
+    // Clear undo after 5 seconds
+    setTimeout(() => {
+      setRecentlyDeleted(null);
+    }, 5000);
+
+    // Refresh items to show newly added ones
+    fetchItems();
+  };
 
   if (loading) {
     return (
@@ -606,162 +659,193 @@ export function GroceryChecklist() {
 
   return (
     <div className="space-y-4">
-      {/* Undo delete button */}
-      {recentlyDeleted && (
-        <Card className="p-3 shadow-card border-destructive/50 bg-destructive/5">
-          <div className="flex items-center justify-between">
-            <div className="text-sm text-foreground">
-              {recentlyDeleted.action === 'purchased' 
-                ? `Purchased "${recentlyDeleted.Item}"` 
-                : recentlyDeleted.action === 'added-saved'
-                ? `Added ${recentlyDeleted.Item}`
-                : `Deleted "${recentlyDeleted.Item}"`}
+      {/* Add Item Section */}
+      <Card className="p-4 shadow-card">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add a new item..."
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && addItem()}
+              className="flex-1"
+            />
+            <Button onClick={addItem} size="sm">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
+                     <div className="flex gap-2">
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={() => setSavedlistModalOpen(true)}
+               className="flex-1"
+             >
+               Add Saved Items
+             </Button>
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={() => setEditSavedlistModalOpen(true)}
+               className="flex-1"
+             >
+               Edit Saved Items
+             </Button>
+           </div>
+           <div className="flex gap-2">
+             <Button
+               variant="outline"
+               size="sm"
+               onClick={() => setSpecialsModalOpen(true)}
+               className="flex-1"
+             >
+               Add Specials
+             </Button>
+           </div>
+        </div>
+      </Card>
+
+      {/* Grocery List Items */}
+      <div className="space-y-2">
+        {items.map((item) => (
+          <Card
+            key={item.id}
+            className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
+            style={getSwipeStyle(item.id)}
+            onTouchStart={(e) => handleTouchStart(e, item.id)}
+            onTouchMove={(e) => handleTouchMove(e, item.id)}
+            onTouchEnd={() => handleTouchEnd(item.id)}
+          >
+            {getSwipeIndicator(item.id)}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 flex-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleItem(item.id)}
+                  className={`h-6 w-6 p-0 rounded-full border-2 ${
+                    item.checked 
+                      ? 'bg-primary border-primary text-primary-foreground' 
+                      : 'border-muted-foreground/20 hover:border-primary'
+                  }`}
+                >
+                  {item.checked && <Check className="h-3 w-3" />}
+                </Button>
+                <div className="flex-1 min-w-0">
+                  <div className={`font-medium text-sm ${
+                    item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+                  }`}>
+                    {item.Item}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateQuantity(item.id, -1)}
+                  disabled={item.Quantity <= 1}
+                  className="h-8 w-8 p-0"
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <span className="text-sm font-medium min-w-[2rem] text-center">
+                  {item.Quantity}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => updateQuantity(item.id, 1)}
+                  className="h-8 w-8 p-0"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => removeItem(item.id)}
+                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* Empty State */}
+      {items.length === 0 && (
+        <Card className="p-6 text-center shadow-card">
+          <div className="text-muted-foreground">
+            Your grocery list is empty. Add some items to get started!
+          </div>
+        </Card>
+      )}
+
+      {/* Undo Button */}
+      {recentlyDeleted && (
+        <Card className="p-4 shadow-card bg-primary/5 border-primary/20">
+          <div className="flex items-center justify-between">
+                         <div className="text-sm text-muted-foreground">
+               {recentlyDeleted.action === 'purchased' && `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} moved to purchase history`}
+               {recentlyDeleted.action === 'deleted' && `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} removed from list`}
+               {recentlyDeleted.action === 'added-saved' && 'Saved items added to list'}
+               {recentlyDeleted.action === 'added-specials' && 'Specials items added to list'}
+             </div>
             <Button
               variant="outline"
               size="sm"
               onClick={undoDelete}
-              className="h-8"
+              className="flex items-center gap-2"
             >
-              <Undo2 className="h-3 w-3 mr-1" />
+              <Undo2 className="h-3 w-3" />
               Undo
             </Button>
           </div>
         </Card>
       )}
 
-      {/* Add new item */}
-      <Card className="p-3 shadow-card">
-        <div className="flex gap-2 mb-3">
-          <Input
-            value={newItem}
-            onChange={(e) => setNewItem(e.target.value)}
-            placeholder="Add a new item..."
-            onKeyPress={(e) => e.key === 'Enter' && addItem()}
-            className="flex-1 h-9"
-          />
-          <Button onClick={addItem} variant="default" size="sm">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        
-        {/* Saved items management */}
-        <div className="flex gap-2 pt-3 border-t">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setStaplesModalOpen(true)}
-            className="flex-1"
-          >
-            Add Saved Items
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setEditStaplesModalOpen(true)}
-            className="flex-1"
-          >
-            Edit Saved Items
-          </Button>
-        </div>
-      </Card>
-
-      {/* Grocery items */}
-      <div className="space-y-1">
-        {items.map((item) => (
-          <div key={item.id} className="relative overflow-hidden">
-            {getSwipeIndicator(item.id)}
-            <Card 
-              className={`p-3 shadow-card transition-all duration-300 hover:shadow-elegant group relative ${
-                item.checked ? 'bg-accent/50' : 'bg-card'
-              }`}
-              style={getSwipeStyle(item.id)}
-              onTouchStart={(e) => handleTouchStart(e, item.id)}
-              onTouchMove={(e) => handleTouchMove(e, item.id)}
-              onTouchEnd={() => handleTouchEnd(item.id)}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3 flex-1">
-                  <button
-                    onClick={() => toggleItem(item.id)}
-                    className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all duration-200 ${
-                      item.checked 
-                        ? 'bg-primary border-primary shadow-glow' 
-                        : 'border-border hover:border-primary'
-                    }`}
-                  >
-                    {item.checked && (
-                      <Check className="h-3 w-3 text-primary-foreground animate-check-bounce" />
-                    )}
-                  </button>
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-medium transition-all duration-200 text-sm ${
-                      item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-                    }`}>
-                      {item.Item}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, -1)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                          disabled={(item.Quantity || 1) <= 1}
-                        >
-                          <Minus className="h-3 w-3" />
-                        </Button>
-                        <span className="text-xs text-muted-foreground min-w-[20px] text-center">
-                          {item.Quantity || 1}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => updateQuantity(item.id, 1)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeItem(item.id)}
-                  className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive h-8 w-8 p-0"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </Card>
-          </div>
-        ))}
-      </div>
-
-      {items.length === 0 && (
-        <Card className="p-6 text-center shadow-card">
-          <div className="text-muted-foreground">
-            Your grocery list is empty. Add some items above!
-          </div>
-        </Card>
-      )}
-
-      {/* Staples Modal */}
-      <StaplesModal
-        isOpen={staplesModalOpen}
-        onClose={() => setStaplesModalOpen(false)}
-        onItemsAdded={handleStaplesItemsAdded}
+      {/* Savedlist Modal */}
+      <SavedlistModal
+        isOpen={savedlistModalOpen}
+        onClose={() => setSavedlistModalOpen(false)}
+        onItemsAdded={handleSavedlistItemsAdded}
       />
 
-      {/* Edit Staples Modal */}
-      <EditStaplesModal
-        isOpen={editStaplesModalOpen}
-        onClose={() => setEditStaplesModalOpen(false)}
-        onStaplesUpdated={() => {
-          // Could refresh saved items if needed
+             {/* Edit Savedlist Modal */}
+       <EditSavedlistModal
+         isOpen={editSavedlistModalOpen}
+         onClose={() => setEditSavedlistModalOpen(false)}
+         onSavedlistUpdated={() => {
+           // Refresh the savedlist modal if it's open
+           if (savedlistModalOpen) {
+             setSavedlistModalOpen(false);
+             setTimeout(() => setSavedlistModalOpen(true), 100);
+           }
+         }}
+       />
+
+       {/* Specials Modal */}
+       <SpecialsModal
+         isOpen={specialsModalOpen}
+         onClose={() => setSpecialsModalOpen(false)}
+         onItemsAdded={handleSpecialsItemsAdded}
+       />
+
+       {/* Quantity Selector */}
+      <QuantitySelector
+        isOpen={quantitySelector.isOpen}
+        onClose={() => setQuantitySelector({ isOpen: false, item: null, actionType: 'purchase' })}
+        onConfirm={(quantity) => {
+          if (quantitySelector.item && quantitySelector.actionType === 'purchase') {
+            processPurchase(quantitySelector.item, quantity);
+          }
+          setQuantitySelector({ isOpen: false, item: null, actionType: 'purchase' });
         }}
+        itemName={quantitySelector.item?.Item || ''}
+        maxQuantity={quantitySelector.item?.Quantity || 1}
+        actionType={quantitySelector.actionType}
       />
     </div>
   );

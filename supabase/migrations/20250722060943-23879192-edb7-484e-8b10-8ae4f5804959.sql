@@ -23,26 +23,26 @@ ON "Purchase history"
 FOR DELETE 
 USING (auth.uid() = user_id);
 
--- Add Row Level Security (RLS) to Staples table
-ALTER TABLE "Staples" ENABLE ROW LEVEL SECURITY;
+-- Add Row Level Security (RLS) to SavedlistItems table
+ALTER TABLE "SavedlistItems" ENABLE ROW LEVEL SECURITY;
 
--- Create policies for Staples table
-CREATE POLICY "Users can view their own staples" 
-ON "Staples" 
+-- Create policies for SavedlistItems table
+CREATE POLICY "Users can view their own saved list items" 
+ON "SavedlistItems" 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can create their own staples" 
-ON "Staples" 
+CREATE POLICY "Users can create their own saved list items" 
+ON "SavedlistItems" 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update their own staples" 
-ON "Staples" 
+CREATE POLICY "Users can update their own saved list items" 
+ON "SavedlistItems" 
 FOR UPDATE 
 USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete their own staples" 
-ON "Staples" 
+CREATE POLICY "Users can delete their own saved list items" 
+ON "SavedlistItems" 
 FOR DELETE 
 USING (auth.uid() = user_id);
