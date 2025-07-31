@@ -808,9 +808,10 @@ export function GroceryChecklist() {
 
   return (
     <div className="space-y-4">
-      {/* Add Item Section */}
+      {/* Add Item Section with Nested Items List */}
       <Card className="p-4 shadow-card">
-        <div className="space-y-3">
+        <div className="space-y-4">
+          {/* Add Item Input */}
           <div className="flex gap-2">
             <Input
               placeholder="Add a new item..."
@@ -823,114 +824,120 @@ export function GroceryChecklist() {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-                     <div className="flex gap-2">
-             <Button
-               variant="outline"
-               size="sm"
-               onClick={() => setSavedlistModalOpen(true)}
-               className="flex-1"
-             >
-               Add Saved Items
-             </Button>
-             <Button
-               variant="outline"
-               size="sm"
-               onClick={() => setEditSavedlistModalOpen(true)}
-               className="flex-1"
-             >
-               Edit Saved Items
-             </Button>
-           </div>
-           <div className="flex gap-2">
-             <Button
-               variant="outline"
-               size="sm"
-               onClick={() => setSpecialsModalOpen(true)}
-               className="flex-1"
-             >
-               Add Specials
-             </Button>
-           </div>
+
+          {/* Grocery List Items */}
+          <div className="space-y-2">
+            {items.map((item) => (
+              <Card
+                key={item.id}
+                className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
+                style={getSwipeStyle(item.id)}
+                onTouchStart={(e) => handleTouchStart(e, item.id)}
+                onTouchMove={(e) => handleTouchMove(e, item.id)}
+                onTouchEnd={() => handleTouchEnd(item.id)}
+              >
+                {getSwipeIndicator(item.id)}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 flex-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleItem(item.id)}
+                      className={`h-6 w-6 p-0 rounded-full border-2 ${
+                        item.checked 
+                          ? 'bg-primary border-primary text-primary-foreground' 
+                          : 'border-muted-foreground/20 hover:border-primary'
+                      }`}
+                    >
+                      {item.checked && <Check className="h-3 w-3" />}
+                    </Button>
+                    <div className="flex-1 min-w-0">
+                      <div className={`font-medium text-sm ${
+                        item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+                      }`}>
+                        {item.Item}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => updateQuantity(item.id, -1)}
+                      disabled={item.Quantity <= 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </Button>
+                    <span className="text-sm font-medium min-w-[2rem] text-center">
+                      {item.Quantity}
+                    </span>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => updateQuantity(item.id, 1)}
+                      className="h-8 w-8 p-0"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => removeItem(item.id)}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            ))}
+
+            {/* Empty State */}
+            {items.length === 0 && (
+              <div className="p-6 text-center">
+                <div className="text-muted-foreground">
+                  Your grocery list is empty. Add some items to get started!
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </Card>
 
-      {/* Grocery List Items */}
-      <div className="space-y-2">
-        {items.map((item) => (
-          <Card
-            key={item.id}
-            className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
-            style={getSwipeStyle(item.id)}
-            onTouchStart={(e) => handleTouchStart(e, item.id)}
-            onTouchMove={(e) => handleTouchMove(e, item.id)}
-            onTouchEnd={() => handleTouchEnd(item.id)}
-          >
-            {getSwipeIndicator(item.id)}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 flex-1">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => toggleItem(item.id)}
-                  className={`h-6 w-6 p-0 rounded-full border-2 ${
-                    item.checked 
-                      ? 'bg-primary border-primary text-primary-foreground' 
-                      : 'border-muted-foreground/20 hover:border-primary'
-                  }`}
-                >
-                  {item.checked && <Check className="h-3 w-3" />}
-                </Button>
-                <div className="flex-1 min-w-0">
-                  <div className={`font-medium text-sm ${
-                    item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-                  }`}>
-                    {item.Item}
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateQuantity(item.id, -1)}
-                  disabled={item.Quantity <= 1}
-                  className="h-8 w-8 p-0"
-                >
-                  <Minus className="h-3 w-3" />
-                </Button>
-                <span className="text-sm font-medium min-w-[2rem] text-center">
-                  {item.Quantity}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => updateQuantity(item.id, 1)}
-                  className="h-8 w-8 p-0"
-                >
-                  <Plus className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeItem(item.id)}
-                  className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Empty State */}
-      {items.length === 0 && (
-        <Card className="p-6 text-center shadow-card">
-          <div className="text-muted-foreground">
-            Your grocery list is empty. Add some items to get started!
+      {/* Action Buttons Section */}
+      <Card className="p-4 shadow-card">
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSavedlistModalOpen(true)}
+              className="flex-1"
+            >
+              Add Saved Items
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEditSavedlistModalOpen(true)}
+              className="flex-1"
+            >
+              Edit Saved Items
+            </Button>
           </div>
-        </Card>
-      )}
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSpecialsModalOpen(true)}
+              className="flex-1"
+            >
+              Add Specials
+            </Button>
+          </div>
+        </div>
+      </Card>
 
 
 
