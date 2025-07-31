@@ -472,43 +472,28 @@ export function GroceryChecklist() {
           if (deleteHistoryError) throw deleteHistoryError;
         }
 
-        // Check if the original item still exists in grocery list (case-insensitive)
-        const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
-        
-        if (existingItem) {
-          // Update the existing item's quantity
-          const newQuantity = (existingItem.Quantity || 0) + (recentlyDeleted.Quantity || 1);
-          const { error: updateError } = await supabase
-            .from('Grocery list')
-            .update({ Quantity: newQuantity })
-            .eq('id', existingItem.id);
+        // Always add back as new item since purchased items are typically deleted
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: recentlyDeleted.Item,
+              Quantity: recentlyDeleted.Quantity || 1,
+              user_id: user.data.user.id
+            }
+          ])
+          .select()
+          .single();
 
-          if (updateError) throw updateError;
+        if (error) throw error;
 
-          setItems(prev => prev.map(i => 
-            i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
-          ));
-        } else {
-          // Add back as new item
-          const { data, error } = await supabase
-            .from('Grocery list')
-            .insert([
-              {
-                Item: recentlyDeleted.Item,
-                Quantity: recentlyDeleted.Quantity || 1,
-                user_id: user.data.user.id
-              }
-            ])
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          if (data) {
-            const newItem = { ...data, checked: false };
-            setItems(prev => [newItem, ...prev]);
-          }
+        if (data) {
+          const newItem = { ...data, checked: false };
+          setItems(prev => [newItem, ...prev]);
         }
+
+        // Refresh the items list to ensure UI is updated
+        await fetchItems();
 
         setRecentlyDeleted(null);
         toast({
