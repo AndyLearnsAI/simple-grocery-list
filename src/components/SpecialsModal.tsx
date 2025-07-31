@@ -45,7 +45,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
       const specialsItemsWithSelection = data?.map(item => ({
         ...item,
-        selectedQuantity: 0
+        selectedQuantity: item.quantity || 1
       })) || [];
 
       setSpecialsItems(specialsItemsWithSelection);
@@ -65,7 +65,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const updateQuantity = (id: number, change: number) => {
     setSpecialsItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQuantity = Math.max(0, Math.min(item.quantity, item.selectedQuantity + change));
+        const newQuantity = Math.max(0, item.selectedQuantity + change);
         return { ...item, selectedQuantity: newQuantity };
       }
       return item;
@@ -153,11 +153,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
         addedItemIds
       });
 
-      toast({
-        title: "Items added!",
-        description: `${itemsToAdd.length} item${itemsToAdd.length === 1 ? '' : 's'} added to grocery list`,
-      });
-
       onClose();
     } catch (error) {
       toast({
@@ -203,7 +198,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                          {item.item}
                        </div>
                        <div className="text-xs text-muted-foreground">
-                         Available: {item.quantity}
+                         Default: {item.quantity}
                        </div>
                      </div>
                     <div className="flex items-center gap-2">
@@ -223,7 +218,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                          variant="outline"
                          size="sm"
                          onClick={() => updateQuantity(item.id, 1)}
-                         disabled={item.selectedQuantity >= item.quantity}
                          className="h-8 w-8 p-0"
                        >
                         <Plus className="h-3 w-3" />

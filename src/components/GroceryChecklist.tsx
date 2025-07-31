@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart } from "lucide-react";
+import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -173,23 +174,28 @@ export function GroceryChecklist() {
       }
 
       // Store for undo functionality
-      setRecentlyDeleted({
+      const deletedItem = {
         ...item,
         Quantity: selectedQuantity,
         deletedAt: Date.now(),
-        action: 'purchased',
+        action: 'purchased' as const,
         purchaseHistoryId: historyData?.id,
         originalQuantity: item.Quantity || 1
-      });
-
-      // Clear undo after 5 seconds
-      setTimeout(() => {
-        setRecentlyDeleted(null);
-      }, 5000);
+      };
+      setRecentlyDeleted(deletedItem);
       
       toast({
         title: "Item purchased!",
         description: `${selectedQuantity} ${item.Item} moved to purchase history`,
+        duration: 10000,
+        action: (
+          <ToastAction 
+            altText="Undo purchase" 
+            onClick={() => undoDelete(deletedItem)}
+          >
+            Undo
+          </ToastAction>
+        ),
       });
 
     } catch (error) {
@@ -308,22 +314,26 @@ export function GroceryChecklist() {
       }
 
       // Store for undo functionality
-      setRecentlyDeleted({
+      const deletedItem = {
         ...item,
         Quantity: selectedQuantity,
         deletedAt: Date.now(),
-        action: 'deleted',
+        action: 'deleted' as const,
         originalQuantity: item.Quantity || 1
-      });
-
-      // Clear undo after 5 seconds
-      setTimeout(() => {
-        setRecentlyDeleted(null);
-      }, 5000);
+      };
+      setRecentlyDeleted(deletedItem);
       
       toast({
         title: "Item removed!",
         description: `${selectedQuantity} ${item.Item} removed from grocery list`,
+        action: (
+          <ToastAction 
+            altText="Undo removal" 
+            onClick={() => undoDelete(deletedItem)}
+          >
+            Undo
+          </ToastAction>
+        ),
       });
 
     } catch (error) {
@@ -454,141 +464,142 @@ export function GroceryChecklist() {
     }
   };
 
-  const undoDelete = async () => {
-    if (!recentlyDeleted) return;
+  const undoDelete = async (deletedItem?: DeletedItem) => {
+    const itemToUndo = deletedItem || recentlyDeleted;
+    if (!itemToUndo) return;
 
     try {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
 
-      if (recentlyDeleted.action === 'purchased') {
-        // Undo purchase: remove from purchase history and restore to grocery list
-        if (recentlyDeleted.purchaseHistoryId) {
+      if (itemToUndo.action === 'purchased') {
+        console.log('🔄 Starting purchase undo for:', itemToUndo);
+        
+        // For purchases, always add back as new item since original was deleted
+        console.log('➕ Adding purchased item back as new item:', {
+          Item: itemToUndo.Item,
+          Quantity: itemToUndo.Quantity || 1,
+          user_id: user.data.user.id
+        });
+        
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: itemToUndo.Item,
+              Quantity: itemToUndo.Quantity || 1,
+              user_id: user.data.user.id
+            }
+          ])
+          .select()
+          .single();
+
+        console.log('📝 Insert result:', { data, error });
+        if (error) throw error;
+
+        if (data) {
+          const newItem = { ...data, checked: false };
+          setItems(prev => [newItem, ...prev]);
+          console.log('✅ Added new item to local state');
+        }
+
+        // Step 2: Now remove from purchase history
+        if (itemToUndo.purchaseHistoryId) {
+          console.log('🗑️ Removing from purchase history, ID:', itemToUndo.purchaseHistoryId);
+          
           const { error: deleteHistoryError } = await supabase
             .from('Purchase history')
             .delete()
-            .eq('id', recentlyDeleted.purchaseHistoryId);
+            .eq('id', itemToUndo.purchaseHistoryId);
 
+          console.log('🗑️ Delete result:', { deleteHistoryError });
           if (deleteHistoryError) throw deleteHistoryError;
         }
 
-        // Check if the original item still exists in grocery list (case-insensitive)
-        const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
-        
-        if (existingItem) {
-          // Update the existing item's quantity
-          const newQuantity = (existingItem.Quantity || 0) + (recentlyDeleted.Quantity || 1);
-          const { error: updateError } = await supabase
-            .from('Grocery list')
-            .update({ Quantity: newQuantity })
-            .eq('id', existingItem.id);
-
-          if (updateError) throw updateError;
-
-          setItems(prev => prev.map(i => 
-            i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
-          ));
-        } else {
-          // Add back as new item
-          const { data, error } = await supabase
-            .from('Grocery list')
-            .insert([
-              {
-                Item: recentlyDeleted.Item,
-                Quantity: recentlyDeleted.Quantity || 1,
-                user_id: user.data.user.id
-              }
-            ])
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          if (data) {
-            const newItem = { ...data, checked: false };
-            setItems(prev => [newItem, ...prev]);
-          }
-        }
+        // Step 3: Refresh the items list to ensure UI is updated
+        console.log('🔄 Refreshing items list...');
+        await fetchItems();
+        console.log('✅ Items refreshed');
 
         setRecentlyDeleted(null);
         toast({
           title: "Purchase undone!",
-          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} restored to grocery list`,
+          description: `${itemToUndo.Quantity} ${itemToUndo.Item} restored to grocery list`,
         });
-      } else if (recentlyDeleted.action === 'deleted') {
-        // Undo delete: restore to grocery list
-        const existingItem = items.find(i => normalizeItemName(i.Item) === normalizeItemName(recentlyDeleted.Item));
+      } else if (itemToUndo.action === 'deleted') {
+        // For deletes, always add back as new item since original was deleted
+        console.log('🔄 Starting delete undo for:', itemToUndo);
+        console.log('➕ Adding deleted item back as new item:', {
+          Item: itemToUndo.Item,
+          Quantity: itemToUndo.Quantity || 1,
+          user_id: user.data.user.id
+        });
         
-        if (existingItem) {
-          // Update the existing item's quantity
-          const newQuantity = (existingItem.Quantity || 0) + (recentlyDeleted.Quantity || 1);
-          const { error: updateError } = await supabase
-            .from('Grocery list')
-            .update({ Quantity: newQuantity })
-            .eq('id', existingItem.id);
+        const { data, error } = await supabase
+          .from('Grocery list')
+          .insert([
+            {
+              Item: itemToUndo.Item,
+              Quantity: itemToUndo.Quantity || 1,
+              user_id: user.data.user.id
+            }
+          ])
+          .select()
+          .single();
 
-          if (updateError) throw updateError;
+        console.log('📝 Insert result:', { data, error });
+        if (error) throw error;
 
-          setItems(prev => prev.map(i => 
-            i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
-          ));
-        } else {
-          // Add back as new item
-          const { data, error } = await supabase
-            .from('Grocery list')
-            .insert([
-              {
-                Item: recentlyDeleted.Item,
-                Quantity: recentlyDeleted.Quantity || 1,
-                user_id: user.data.user.id
-              }
-            ])
-            .select()
-            .single();
-
-          if (error) throw error;
-
-          if (data) {
-            const newItem = { ...data, checked: false };
-            setItems(prev => [newItem, ...prev]);
-          }
+        if (data) {
+          const newItem = { ...data, checked: false };
+          setItems(prev => [newItem, ...prev]);
+          console.log('✅ Added deleted item back to local state');
         }
+
+        // Refresh the items list to ensure UI is updated
+        await fetchItems();
 
         setRecentlyDeleted(null);
         toast({
           title: "Delete undone!",
-          description: `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} restored to grocery list`,
+          description: `${itemToUndo.Quantity} ${itemToUndo.Item} restored to grocery list`,
         });
-             } else if (recentlyDeleted.action === 'added-saved') {
+             } else if (itemToUndo.action === 'added-saved') {
          // Undo saved items addition: remove added items
-         if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
+         if (itemToUndo.addedItemIds && itemToUndo.addedItemIds.length > 0) {
            const { error: deleteError } = await supabase
              .from('Grocery list')
              .delete()
-             .in('id', recentlyDeleted.addedItemIds);
+             .in('id', itemToUndo.addedItemIds);
 
            if (deleteError) throw deleteError;
 
-           setItems(prev => prev.filter(i => !recentlyDeleted.addedItemIds?.includes(i.id)));
+           setItems(prev => prev.filter(i => !itemToUndo.addedItemIds?.includes(i.id)));
          }
+
+         // Refresh the items list to ensure UI is updated
+         await fetchItems();
 
          setRecentlyDeleted(null);
          toast({
            title: "Addition undone!",
            description: "Saved items removed from grocery list",
          });
-       } else if (recentlyDeleted.action === 'added-specials') {
+       } else if (itemToUndo.action === 'added-specials') {
          // Undo specials items addition: remove added items
-         if (recentlyDeleted.addedItemIds && recentlyDeleted.addedItemIds.length > 0) {
+         if (itemToUndo.addedItemIds && itemToUndo.addedItemIds.length > 0) {
            const { error: deleteError } = await supabase
              .from('Grocery list')
              .delete()
-             .in('id', recentlyDeleted.addedItemIds);
+             .in('id', itemToUndo.addedItemIds);
 
            if (deleteError) throw deleteError;
 
-           setItems(prev => prev.filter(i => !recentlyDeleted.addedItemIds?.includes(i.id)));
+           setItems(prev => prev.filter(i => !itemToUndo.addedItemIds?.includes(i.id)));
          }
+
+         // Refresh the items list to ensure UI is updated
+         await fetchItems();
 
          setRecentlyDeleted(null);
          toast({
@@ -607,20 +618,29 @@ export function GroceryChecklist() {
 
   const handleSavedlistItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
     // Store for undo functionality
-    setRecentlyDeleted({
+    const deletedItem = {
       id: Date.now(),
       Item: '',
       Quantity: 0,
       deletedAt: Date.now(),
-      action: 'added-saved',
+      action: 'added-saved' as const,
       addedItemIds: addedData.addedItemIds,
       addedItems: addedData.items
-    });
+    };
+    setRecentlyDeleted(deletedItem);
 
-    // Clear undo after 5 seconds
-    setTimeout(() => {
-      setRecentlyDeleted(null);
-    }, 5000);
+    toast({
+      title: "Items added!",
+      description: `${addedData.items.length} item${addedData.items.length === 1 ? '' : 's'} added from saved list`,
+      action: (
+        <ToastAction 
+          altText="Undo addition" 
+          onClick={() => undoDelete(deletedItem)}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
 
     // Refresh items to show newly added ones
     fetchItems();
@@ -628,20 +648,29 @@ export function GroceryChecklist() {
 
   const handleSpecialsItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
     // Store for undo functionality
-    setRecentlyDeleted({
+    const deletedItem = {
       id: Date.now(),
       Item: '',
       Quantity: 0,
       deletedAt: Date.now(),
-      action: 'added-specials',
+      action: 'added-specials' as const,
       addedItemIds: addedData.addedItemIds,
       addedItems: addedData.items
-    });
+    };
+    setRecentlyDeleted(deletedItem);
 
-    // Clear undo after 5 seconds
-    setTimeout(() => {
-      setRecentlyDeleted(null);
-    }, 5000);
+    toast({
+      title: "Items added!",
+      description: `${addedData.items.length} item${addedData.items.length === 1 ? '' : 's'} added from specials`,
+      action: (
+        <ToastAction 
+          altText="Undo addition" 
+          onClick={() => undoDelete(deletedItem)}
+        >
+          Undo
+        </ToastAction>
+      ),
+    });
 
     // Refresh items to show newly added ones
     fetchItems();
@@ -783,28 +812,7 @@ export function GroceryChecklist() {
         </Card>
       )}
 
-      {/* Undo Button */}
-      {recentlyDeleted && (
-        <Card className="p-4 shadow-card bg-primary/5 border-primary/20">
-          <div className="flex items-center justify-between">
-                         <div className="text-sm text-muted-foreground">
-               {recentlyDeleted.action === 'purchased' && `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} moved to purchase history`}
-               {recentlyDeleted.action === 'deleted' && `${recentlyDeleted.Quantity} ${recentlyDeleted.Item} removed from list`}
-               {recentlyDeleted.action === 'added-saved' && 'Saved items added to list'}
-               {recentlyDeleted.action === 'added-specials' && 'Specials items added to list'}
-             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={undoDelete}
-              className="flex items-center gap-2"
-            >
-              <Undo2 className="h-3 w-3" />
-              Undo
-            </Button>
-          </div>
-        </Card>
-      )}
+
 
       {/* Savedlist Modal */}
       <SavedlistModal
@@ -832,7 +840,6 @@ export function GroceryChecklist() {
          onClose={() => setSpecialsModalOpen(false)}
          onItemsAdded={handleSpecialsItemsAdded}
        />
-
        {/* Quantity Selector */}
       <QuantitySelector
         isOpen={quantitySelector.isOpen}

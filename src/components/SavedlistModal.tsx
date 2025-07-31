@@ -45,7 +45,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       const savedlistItemsWithSelection = data?.map(item => ({
         ...item,
-        selectedQuantity: 0
+        selectedQuantity: item.Quantity || 1
       })) || [];
 
       setSavedlistItems(savedlistItemsWithSelection);
@@ -64,7 +64,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const updateQuantity = (id: number, change: number) => {
     setSavedlistItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQuantity = Math.max(0, Math.min(item.Quantity, item.selectedQuantity + change));
+        const newQuantity = Math.max(0, item.selectedQuantity + change);
         return { ...item, selectedQuantity: newQuantity };
       }
       return item;
@@ -152,11 +152,6 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
         addedItemIds
       });
 
-      toast({
-        title: "Items added!",
-        description: `${itemsToAdd.length} item${itemsToAdd.length === 1 ? '' : 's'} added to grocery list`,
-      });
-
       onClose();
     } catch (error) {
       toast({
@@ -202,7 +197,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                         {item.Item}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Available: {item.Quantity}
+                        Default: {item.Quantity}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -222,7 +217,6 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                         variant="outline"
                         size="sm"
                         onClick={() => updateQuantity(item.id, 1)}
-                        disabled={item.selectedQuantity >= item.Quantity}
                         className="h-8 w-8 p-0"
                       >
                         <Plus className="h-3 w-3" />
