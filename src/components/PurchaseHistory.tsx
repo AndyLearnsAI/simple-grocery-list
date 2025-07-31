@@ -407,21 +407,6 @@ export function PurchaseHistory() {
 
   return (
     <div className="space-y-4">
-      {/* Header */}
-      <Card className="p-4 shadow-card">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 bg-gradient-primary rounded-lg flex items-center justify-center shadow-glow">
-            <Calendar className="h-4 w-4 text-primary-foreground" />
-          </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Purchase History</h2>
-            <p className="text-sm text-muted-foreground">
-              {todayGroup ? `${todayGroup.count} ${todayGroup.count === 1 ? 'item' : 'items'} purchased today` : 'No items purchased today'}
-            </p>
-          </div>
-        </div>
-      </Card>
-
       {/* Today's group */}
       {todayGroup && (
         <div className="space-y-2">
