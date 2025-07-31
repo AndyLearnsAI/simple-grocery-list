@@ -99,7 +99,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
       if (fetchError) throw fetchError;
 
-      const itemsToAdd: { item: string; quantity: number }[] = [];
+      const itemsToAdd: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[] = [];
       const addedItemIds: number[] = [];
 
       for (const selectedItem of selectedItems) {
@@ -110,7 +110,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
         if (existingItem) {
           // Update existing item quantity
-          const newQuantity = (existingItem.Quantity || 0) + selectedItem.selectedQuantity;
+          const originalQuantity = existingItem.Quantity || 0;
+          const newQuantity = originalQuantity + selectedItem.selectedQuantity;
           const { error: updateError } = await supabase
             .from('Grocery list')
             .update({ Quantity: newQuantity })
@@ -118,6 +119,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
           if (updateError) throw updateError;
           addedItemIds.push(existingItem.id);
+          
+          itemsToAdd.push({
+            item: selectedItem.item,
+            quantity: selectedItem.selectedQuantity,
+            originalQuantity: originalQuantity,
+            wasNew: false
+          });
         } else {
           // Add new item to grocery list
           const { data: newItem, error: insertError } = await supabase
@@ -136,12 +144,14 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
           if (newItem) {
             addedItemIds.push(newItem.id);
           }
+          
+          itemsToAdd.push({
+            item: selectedItem.item,
+            quantity: selectedItem.selectedQuantity,
+            originalQuantity: 0,
+            wasNew: true
+          });
         }
-
-        itemsToAdd.push({
-          item: selectedItem.item,
-          quantity: selectedItem.selectedQuantity
-        });
       }
 
       // Reset selections

@@ -27,7 +27,7 @@ interface DeletedItem extends GroceryItem {
   purchaseHistoryId?: number;
   originalQuantity?: number;
   addedItemIds?: number[];
-  addedItems?: { item: string; quantity: number }[];
+  addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
 }
 
 export function GroceryChecklist() {
@@ -564,48 +564,168 @@ export function GroceryChecklist() {
           title: "Delete undone!",
           description: `${itemToUndo.Quantity} ${itemToUndo.Item} restored to grocery list`,
         });
-             } else if (itemToUndo.action === 'added-saved') {
-         // Undo saved items addition: remove added items
-         if (itemToUndo.addedItemIds && itemToUndo.addedItemIds.length > 0) {
-           const { error: deleteError } = await supabase
-             .from('Grocery list')
-             .delete()
-             .in('id', itemToUndo.addedItemIds);
+      } else if (itemToUndo.action === 'added-saved') {
+        // Undo saved items addition: restore original quantities or delete new items
+        if (itemToUndo.addedItems && itemToUndo.addedItems.length > 0) {
+          // Helper function for case-insensitive comparison
+          const normalizeItemName = (name: string) => name.toLowerCase().trim();
+          
+          console.log('🔄 Starting undo for saved items:', itemToUndo.addedItems);
+          
+          // Fetch fresh data from database to avoid stale state issues
+          const { data: currentItems, error: fetchError } = await supabase
+            .from('Grocery list')
+            .select('*')
+            .eq('user_id', user.data.user.id);
+          
+          if (fetchError) throw fetchError;
+          
+          console.log('📋 Fresh items from database:', currentItems?.map(i => ({ id: i.id, Item: i.Item, Quantity: i.Quantity })));
+          
+          for (const addedItem of itemToUndo.addedItems) {
+            console.log('🔍 Processing undo for item:', addedItem);
+            
+            // Find the current item in the database
+            const currentItem = currentItems?.find(i => 
+              normalizeItemName(i.Item) === normalizeItemName(addedItem.item)
+            );
+            
+            console.log('🔍 Found current item:', currentItem ? { id: currentItem.id, Item: currentItem.Item, Quantity: currentItem.Quantity } : 'NOT FOUND');
+            
+            if (currentItem) {
+              if (addedItem.wasNew) {
+                console.log('🗑️ Item was new, deleting entirely. ID:', currentItem.id);
+                
+                // Item was completely new, delete it entirely
+                const { error: deleteError } = await supabase
+                  .from('Grocery list')
+                  .delete()
+                  .eq('id', currentItem.id);
+                
+                console.log('🗑️ Delete result:', { deleteError });
+                if (deleteError) throw deleteError;
+                console.log('✅ Deleted item from database');
+              } else {
+                // Item already existed, restore to original quantity
+                const originalQuantity = addedItem.originalQuantity || 0;
+                
+                if (originalQuantity <= 0) {
+                  // Original quantity was 0, delete the item
+                  const { error: deleteError } = await supabase
+                    .from('Grocery list')
+                    .delete()
+                    .eq('id', currentItem.id);
+                  
+                  if (deleteError) throw deleteError;
+                  
+                  setItems(prev => prev.filter(i => i.id !== currentItem.id));
+                } else {
+                  // Update item back to original quantity
+                  const { error: updateError } = await supabase
+                    .from('Grocery list')
+                    .update({ Quantity: originalQuantity })
+                    .eq('id', currentItem.id);
+                  
+                  if (updateError) throw updateError;
+                  
+                  setItems(prev => prev.map(i => 
+                    i.id === currentItem.id ? { ...i, Quantity: originalQuantity } : i
+                  ));
+                }
+              }
+            }
+          }
+        }
 
-           if (deleteError) throw deleteError;
+        // Refresh the items list to ensure UI is updated
+        await fetchItems();
 
-           setItems(prev => prev.filter(i => !itemToUndo.addedItemIds?.includes(i.id)));
-         }
+        setRecentlyDeleted(null);
+        toast({
+          title: "Addition undone!",
+          description: "Saved items addition undone",
+        });
+      } else if (itemToUndo.action === 'added-specials') {
+        // Undo specials items addition: restore original quantities or delete new items
+        if (itemToUndo.addedItems && itemToUndo.addedItems.length > 0) {
+          // Helper function for case-insensitive comparison
+          const normalizeItemName = (name: string) => name.toLowerCase().trim();
+          
+          console.log('🔄 Starting undo for specials items:', itemToUndo.addedItems);
+          
+          // Fetch fresh data from database to avoid stale state issues
+          const { data: currentItems, error: fetchError } = await supabase
+            .from('Grocery list')
+            .select('*')
+            .eq('user_id', user.data.user.id);
+          
+          if (fetchError) throw fetchError;
+          
+          console.log('📋 Fresh items from database:', currentItems?.map(i => ({ id: i.id, Item: i.Item, Quantity: i.Quantity })));
+          
+          for (const addedItem of itemToUndo.addedItems) {
+            console.log('🔍 Processing undo for item:', addedItem);
+            
+            // Find the current item in the database
+            const currentItem = currentItems?.find(i => 
+              normalizeItemName(i.Item) === normalizeItemName(addedItem.item)
+            );
+            
+            console.log('🔍 Found current item:', currentItem ? { id: currentItem.id, Item: currentItem.Item, Quantity: currentItem.Quantity } : 'NOT FOUND');
+            
+            if (currentItem) {
+              if (addedItem.wasNew) {
+                console.log('🗑️ Item was new, deleting entirely. ID:', currentItem.id);
+                
+                // Item was completely new, delete it entirely
+                const { error: deleteError } = await supabase
+                  .from('Grocery list')
+                  .delete()
+                  .eq('id', currentItem.id);
+                
+                console.log('🗑️ Delete result:', { deleteError });
+                if (deleteError) throw deleteError;
+                console.log('✅ Deleted item from database');
+              } else {
+                // Item already existed, restore to original quantity
+                const originalQuantity = addedItem.originalQuantity || 0;
+                
+                if (originalQuantity <= 0) {
+                  // Original quantity was 0, delete the item
+                  const { error: deleteError } = await supabase
+                    .from('Grocery list')
+                    .delete()
+                    .eq('id', currentItem.id);
+                  
+                  if (deleteError) throw deleteError;
+                  
+                  setItems(prev => prev.filter(i => i.id !== currentItem.id));
+                } else {
+                  // Update item back to original quantity
+                  const { error: updateError } = await supabase
+                    .from('Grocery list')
+                    .update({ Quantity: originalQuantity })
+                    .eq('id', currentItem.id);
+                  
+                  if (updateError) throw updateError;
+                  
+                  setItems(prev => prev.map(i => 
+                    i.id === currentItem.id ? { ...i, Quantity: originalQuantity } : i
+                  ));
+                }
+              }
+            }
+          }
+        }
 
-         // Refresh the items list to ensure UI is updated
-         await fetchItems();
+        // Refresh the items list to ensure UI is updated
+        await fetchItems();
 
-         setRecentlyDeleted(null);
-         toast({
-           title: "Addition undone!",
-           description: "Saved items removed from grocery list",
-         });
-       } else if (itemToUndo.action === 'added-specials') {
-         // Undo specials items addition: remove added items
-         if (itemToUndo.addedItemIds && itemToUndo.addedItemIds.length > 0) {
-           const { error: deleteError } = await supabase
-             .from('Grocery list')
-             .delete()
-             .in('id', itemToUndo.addedItemIds);
-
-           if (deleteError) throw deleteError;
-
-           setItems(prev => prev.filter(i => !itemToUndo.addedItemIds?.includes(i.id)));
-         }
-
-         // Refresh the items list to ensure UI is updated
-         await fetchItems();
-
-         setRecentlyDeleted(null);
-         toast({
-           title: "Addition undone!",
-           description: "Specials items removed from grocery list",
-         });
+        setRecentlyDeleted(null);
+        toast({
+          title: "Addition undone!",
+          description: "Specials addition undone",
+        });
        }
     } catch (error) {
       toast({
@@ -616,7 +736,7 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleSavedlistItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
+  const handleSavedlistItemsAdded = (addedData: { items: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[]; addedItemIds: number[] }) => {
     // Store for undo functionality
     const deletedItem = {
       id: Date.now(),
@@ -646,7 +766,7 @@ export function GroceryChecklist() {
     fetchItems();
   };
 
-  const handleSpecialsItemsAdded = (addedData: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => {
+  const handleSpecialsItemsAdded = (addedData: { items: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[]; addedItemIds: number[] }) => {
     // Store for undo functionality
     const deletedItem = {
       id: Date.now(),
