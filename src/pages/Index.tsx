@@ -5,9 +5,10 @@ import { User, Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GroceryChecklist } from "@/components/GroceryChecklist";
 import { PurchaseHistory } from "@/components/PurchaseHistory";
-import { ShoppingCart, LogOut, History } from "lucide-react";
+import { ShoppingCart, LogOut, History, AlertTriangle } from "lucide-react";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -15,8 +16,19 @@ const Index = () => {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [configError, setConfigError] = useState(false);
 
   useEffect(() => {
+    // Check if environment variables are properly configured
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+    
+    if (!supabaseUrl || !supabaseKey || supabaseUrl === 'https://placeholder.supabase.co') {
+      setConfigError(true);
+      setLoading(false);
+      return;
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
@@ -37,15 +49,35 @@ const Index = () => {
   }, []);
 
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !configError) {
       navigate("/auth");
     }
-  }, [user, loading, navigate]);
+  }, [user, loading, navigate, configError]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate("/auth");
   };
+
+  if (configError) {
+    return (
+      <div className="min-h-screen bg-gradient-subtle flex items-center justify-center p-4">
+        <div className="max-w-md w-full">
+          <Alert className="border-red-200 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertDescription className="text-red-800">
+              <strong>Configuration Error</strong><br />
+              The app is not properly configured. Please check your environment variables:
+              <br /><br />
+              • VITE_SUPABASE_URL<br />
+              • VITE_SUPABASE_PUBLISHABLE_KEY<br /><br />
+              If you're deploying to Vercel, make sure these are set in your project settings.
+            </AlertDescription>
+          </Alert>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

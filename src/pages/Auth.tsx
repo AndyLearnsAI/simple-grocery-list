@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Sparkles, Loader2 } from "lucide-react";
+import { ShoppingCart, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 const Auth = () => {
@@ -122,10 +122,9 @@ const Auth = () => {
         {/* Header */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-primary rounded-xl flex items-center justify-center shadow-glow mx-auto mb-4">
-            <Sparkles className="h-8 w-8 text-primary-foreground" />
+            <ShoppingCart className="h-8 w-8 text-primary-foreground" />
           </div>
-          <h1 className="text-3xl font-bold text-primary">Smart Grocery</h1>
-          <p className="text-muted-foreground">AI-Powered Shopping Assistant</p>
+          <h1 className="text-3xl font-bold text-primary">Simple Grocery List</h1>
         </div>
 
         <Card className="shadow-card border">
