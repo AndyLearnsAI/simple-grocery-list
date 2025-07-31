@@ -89,48 +89,39 @@ export type Database = {
         }
         Relationships: []
       }
-      SpecialsColes: {
+      specials: {
         Row: {
           created_at: string
           id: number
-          Item: string
-          Quantity: number
+          item: string
+          quantity: number
+          category: string | null
+          price: number | null
+          discount: string | null
+          catalogue_date: string | null
         }
         Insert: {
           created_at?: string
           id?: number
-          Item: string
-          Quantity?: number
+          item: string
+          quantity?: number
+          category?: string | null
+          price?: number | null
+          discount?: string | null
+          catalogue_date?: string | null
         }
         Update: {
           created_at?: string
           id?: number
-          Item?: string
-          Quantity?: number
+          item?: string
+          quantity?: number
+          category?: string | null
+          price?: number | null
+          discount?: string | null
+          catalogue_date?: string | null
         }
         Relationships: []
       }
-                  specials: {
-              Row: {
-                created_at: string
-                id: number
-                item: string
-                quantity: number
-              }
-              Insert: {
-                created_at?: string
-                id?: number
-                item: string
-                quantity?: number
-              }
-              Update: {
-                created_at?: string
-                id?: number
-                item?: string
-                quantity?: number
-              }
-              Relationships: []
-            }
     }
     Views: {
       [_ in never]: never
