@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
-import { EditSavedlistModal } from "./EditSavedlistModal";
+
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 
@@ -49,7 +49,6 @@ export function GroceryChecklist() {
     }
   }>({});
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
-  const [editSavedlistModalOpen, setEditSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const { toast } = useToast();
 
@@ -920,16 +919,6 @@ export function GroceryChecklist() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setEditSavedlistModalOpen(true)}
-              className="flex-1"
-            >
-              Edit Saved Items
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
               onClick={() => setSpecialsModalOpen(true)}
               className="flex-1"
             >
@@ -948,18 +937,7 @@ export function GroceryChecklist() {
         onItemsAdded={handleSavedlistItemsAdded}
       />
 
-             {/* Edit Savedlist Modal */}
-       <EditSavedlistModal
-         isOpen={editSavedlistModalOpen}
-         onClose={() => setEditSavedlistModalOpen(false)}
-         onSavedlistUpdated={() => {
-           // Refresh the savedlist modal if it's open
-           if (savedlistModalOpen) {
-             setSavedlistModalOpen(false);
-             setTimeout(() => setSavedlistModalOpen(true), 100);
-           }
-         }}
-       />
+
 
        {/* Specials Modal */}
        <SpecialsModal

@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
-import { Package, Plus, Minus, X } from "lucide-react";
+import { Package, Plus, Minus, X, Edit3, Trash2, Save } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -26,6 +27,9 @@ interface SavedlistModalProps {
 export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModalProps) {
   const [savedlistItems, setSavedlistItems] = useState<SelectedSavedlistItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [newItem, setNewItem] = useState("");
+  const [saving, setSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -64,8 +68,15 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const updateQuantity = (id: number, change: number) => {
     setSavedlistItems(prev => prev.map(item => {
       if (item.id === id) {
-        const newQuantity = Math.max(0, item.selectedQuantity + change);
-        return { ...item, selectedQuantity: newQuantity };
+        if (isEditMode) {
+          // In edit mode, update the actual quantity with minimum of 1
+          const newQuantity = Math.max(1, item.Quantity + change);
+          return { ...item, Quantity: newQuantity };
+        } else {
+          // In add mode, update selected quantity with minimum of 0
+          const newQuantity = Math.max(0, item.selectedQuantity + change);
+          return { ...item, selectedQuantity: newQuantity };
+        }
       }
       return item;
     }));
@@ -172,14 +183,134 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
     }
   };
 
+  const removeItem = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('SavedlistItems')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setSavedlistItems(prev => prev.filter(item => item.id !== id));
+      toast({
+        title: "Item removed",
+        description: "Item removed from saved list",
+      });
+    } catch (error) {
+      toast({
+        title: "Error removing item",
+        description: "Failed to remove item from saved list",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const addItem = async () => {
+    if (!newItem.trim()) return;
+
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      // Check for existing item (case-insensitive)
+      const existingItem = savedlistItems.find(item =>
+        item.Item.toLowerCase().trim() === newItem.toLowerCase().trim()
+      );
+
+      if (existingItem) {
+        toast({
+          title: "Item already exists",
+          description: "This item is already in your saved list",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('SavedlistItems')
+        .insert([
+          {
+            Item: newItem.trim(),
+            Quantity: 1,
+            user_id: user.data.user.id
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newItemWithSelection = {
+        ...data,
+        selectedQuantity: data.Quantity || 1
+      };
+
+      setSavedlistItems(prev => [...prev, newItemWithSelection].sort((a, b) => a.Item.localeCompare(b.Item)));
+      setNewItem("");
+      toast({
+        title: "Item added",
+        description: "Item added to saved list",
+      });
+    } catch (error) {
+      toast({
+        title: "Error adding item",
+        description: "Failed to add item to saved list",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const saveChanges = async () => {
+    setSaving(true);
+    try {
+      const updatePromises = savedlistItems.map(item =>
+        supabase
+          .from('SavedlistItems')
+          .update({ Quantity: item.Quantity })
+          .eq('id', item.id)
+      );
+
+      await Promise.all(updatePromises);
+      
+      toast({
+        title: "Changes saved",
+        description: "All changes have been saved",
+      });
+      
+      setIsEditMode(false);
+      
+      // Reset selectedQuantity to match updated Quantity for add mode
+      setSavedlistItems(prev => prev.map(item => ({
+        ...item,
+        selectedQuantity: 0
+      })));
+    } catch (error) {
+      toast({
+        title: "Error saving changes",
+        description: "Failed to save changes",
+        variant: "destructive",
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    setIsEditMode(false);
+    setNewItem("");
+    setSavedlistItems(prev => prev.map(item => ({ ...item, selectedQuantity: 0 })));
+    onClose();
+  };
+
   const selectedCount = savedlistItems.filter(item => item.selectedQuantity > 0).length;
 
   if (loading) {
     return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Saved Items</DialogTitle>
+            <DialogTitle>{isEditMode ? "Edit Saved Items" : "Add Saved Items"}</DialogTitle>
           </DialogHeader>
           <div className="text-center py-8">
             <div className="text-muted-foreground">Loading saved list items...</div>
@@ -190,13 +321,39 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Add Saved Items</DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle>{isEditMode ? "Edit Saved Items" : "Add Saved Items"}</DialogTitle>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsEditMode(!isEditMode)}
+              className="h-8 w-8 p-0"
+            >
+              <Edit3 className="h-4 w-4" />
+            </Button>
+          </div>
         </DialogHeader>
         
         <div className="space-y-4">
+          {/* Add new item input (only shown in edit mode) */}
+          {isEditMode && (
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add new item..."
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addItem()}
+                className="flex-1"
+              />
+              <Button onClick={addItem} size="sm">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+
           {savedlistItems.length > 0 ? (
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {savedlistItems.map((item) => (
@@ -206,22 +363,24 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                       <div className="font-medium text-sm text-foreground truncate">
                         {item.Item}
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        Default: {item.Quantity}
-                      </div>
+                      {!isEditMode && (
+                        <div className="text-xs text-muted-foreground">
+                          Default: {item.Quantity}
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => updateQuantity(item.id, -1)}
-                        disabled={item.selectedQuantity <= 0}
+                        disabled={isEditMode ? item.Quantity <= 1 : item.selectedQuantity <= 0}
                         className="h-8 w-8 p-0"
                       >
                         <Minus className="h-3 w-3" />
                       </Button>
                       <span className="text-sm font-medium min-w-[2rem] text-center">
-                        {item.selectedQuantity}
+                        {isEditMode ? item.Quantity : item.selectedQuantity}
                       </span>
                       <Button
                         variant="outline"
@@ -231,6 +390,16 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                       >
                         <Plus className="h-3 w-3" />
                       </Button>
+                      {isEditMode && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeItem(item.id)}
+                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -239,7 +408,10 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           ) : savedlistItems.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-muted-foreground">
-                No saved list items yet. Use "Edit Saved Items" to add some!
+                {isEditMode 
+                  ? "No saved list items yet. Add some items to get started!"
+                  : "No saved list items yet. Use the edit button to add some!"
+                }
               </div>
             </div>
           ) : null}
@@ -247,18 +419,28 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           <div className="flex gap-2 pt-4 border-t">
             <Button
               variant="outline"
-              onClick={onClose}
+              onClick={handleClose}
               className="flex-1"
             >
               Cancel
             </Button>
-            <Button
-              onClick={addSelectedItems}
-              disabled={selectedCount === 0}
-              className="flex-1"
-            >
-              Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
-            </Button>
+            {isEditMode ? (
+              <Button
+                onClick={saveChanges}
+                disabled={saving}
+                className="flex-1"
+              >
+                {saving ? "Saving..." : "Save Changes"}
+              </Button>
+            ) : (
+              <Button
+                onClick={addSelectedItems}
+                disabled={selectedCount === 0}
+                className="flex-1"
+              >
+                Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>
