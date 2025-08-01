@@ -3,6 +3,7 @@ import { Package, Plus, Minus, X, ChevronDown, ChevronRight } from "lucide-react
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -382,8 +383,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   try {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md">
-          <DialogHeader>
+        <DialogContent className="w-full max-w-3xl h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Add Specials</DialogTitle>
             {lastUpdated && (
               <div className="text-sm text-muted-foreground">
@@ -392,9 +393,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
             )}
           </DialogHeader>
           
-          <div className="space-y-4">
+          <div className="flex flex-col flex-1 min-h-0">
             {categoryGroups.length > 0 ? (
-              <div className="space-y-2 max-h-96 overflow-y-auto">
+              <div className="space-y-2 overflow-y-auto flex-1 pr-2">
                 {categoryGroups.map((group) => (
                   <div key={group.name} className="border rounded-lg">
                     <Button 
@@ -402,17 +403,17 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                       className="w-full justify-between p-2 h-auto"
                       onClick={() => toggleCategory(group.name)}
                     >
-                      <div className="flex items-center gap-2">
-                        <Package className="h-4 w-4" />
-                        <span className="font-medium">{group.name}</span>
-                        <span className="text-sm text-muted-foreground">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Package className="h-4 w-4 flex-shrink-0" />
+                        <span className="font-medium truncate">{group.name}</span>
+                        <span className="text-sm text-muted-foreground flex-shrink-0">
                           ({group.subGroups.reduce((acc, sg) => acc + sg.items.length, 0)} items)
                         </span>
                       </div>
                       {group.isExpanded ? (
-                        <ChevronDown className="h-4 w-4" />
+                        <ChevronDown className="h-4 w-4 flex-shrink-0" />
                       ) : (
-                        <ChevronRight className="h-4 w-4" />
+                        <ChevronRight className="h-4 w-4 flex-shrink-0" />
                       )}
                     </Button>
                     {group.isExpanded && (
@@ -424,34 +425,52 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                               className="w-full justify-between p-2 h-auto text-sm"
                               onClick={() => toggleDiscountGroup(group.name, subGroup.name)}
                             >
-                              <div className="flex items-center gap-2">
-                                <span className="font-medium">{subGroup.name}</span>
-                                <span className="text-xs text-muted-foreground">
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <span className="font-medium truncate">{subGroup.name}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">
                                   ({subGroup.items.length} items)
                                 </span>
                               </div>
                               {subGroup.isExpanded ? (
-                                <ChevronDown className="h-4 w-4" />
+                                <ChevronDown className="h-4 w-4 flex-shrink-0" />
                               ) : (
-                                <ChevronRight className="h-4 w-4" />
+                                <ChevronRight className="h-4 w-4 flex-shrink-0" />
                               )}
                             </Button>
                             {subGroup.isExpanded && (
                               <div className="space-y-2 mt-2 pl-4">
                                 {subGroup.items.map((item) => (
                                   <Card key={item.id} className="p-3 shadow-card">
-                                    <div className="flex items-center justify-between">
+                                    <div className="flex items-center justify-between gap-3">
                                       <div className="flex-1 min-w-0">
-                                        <div className="font-medium text-sm text-foreground truncate">
-                                          {item.item}
-                                        </div>
+                                        <TooltipProvider>
+                                          <Tooltip>
+                                            <TooltipTrigger asChild>
+                                              <div className="font-medium text-sm text-foreground truncate cursor-help">
+                                                {item.item}
+                                              </div>
+                                            </TooltipTrigger>
+                                            <TooltipContent side="top" className="max-w-xs">
+                                              <p className="break-words">{item.item}</p>
+                                            </TooltipContent>
+                                          </Tooltip>
+                                        </TooltipProvider>
                                         {item.price && (
-                                          <div className="text-xs text-muted-foreground truncate">
-                                            {formatPrice(item.price, item.discount)}
-                                          </div>
+                                          <TooltipProvider>
+                                            <Tooltip>
+                                              <TooltipTrigger asChild>
+                                                <div className="text-xs text-muted-foreground truncate cursor-help">
+                                                  {formatPrice(item.price, item.discount)}
+                                                </div>
+                                              </TooltipTrigger>
+                                              <TooltipContent side="top" className="max-w-xs">
+                                                <p className="break-words">{formatPrice(item.price, item.discount)}</p>
+                                              </TooltipContent>
+                                            </Tooltip>
+                                          </TooltipProvider>
                                         )}
                                       </div>
-                                      <div className="flex items-center gap-2">
+                                      <div className="flex items-center gap-2 flex-shrink-0">
                                         <Button
                                           variant="outline"
                                           size="sm"
@@ -486,14 +505,14 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 ))}
               </div>
             ) : (
-              <div className="text-center py-8">
+              <div className="text-center py-8 flex-1 flex items-center justify-center">
                 <div className="text-muted-foreground">
                   No specials items available at the moment.
                 </div>
               </div>
             )}
 
-            <div className="flex gap-2 pt-4 border-t">
+            <div className="flex gap-2 pt-4 border-t flex-shrink-0 mt-4">
               <Button
                 variant="outline"
                 onClick={onClose}
@@ -517,7 +536,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     console.error('Error rendering SpecialsModal:', error);
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md">
+        <DialogContent className="w-full max-w-3xl">
           <DialogHeader>
             <DialogTitle>Add Specials</DialogTitle>
           </DialogHeader>
