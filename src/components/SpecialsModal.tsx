@@ -21,9 +21,15 @@ interface SelectedSpecialsItem extends SpecialsItem {
   selectedQuantity: number;
 }
 
+interface DiscountGroup {
+  name: 'Discounted' | 'Not Discounted';
+  items: SelectedSpecialsItem[];
+  isExpanded: boolean;
+}
+
 interface CategoryGroup {
   name: string;
-  items: SelectedSpecialsItem[];
+  subGroups: DiscountGroup[];
   isExpanded: boolean;
 }
 
@@ -71,27 +77,41 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
         setLastUpdated(earliestDate);
       }
 
-      // Group items by category
-      const groupedItems = data?.reduce((groups: { [key: string]: SelectedSpecialsItem[] }, item) => {
+      // Group items by category and then by discount status
+      const groupedItems = data?.reduce((groups: { [key: string]: { discounted: SelectedSpecialsItem[], notDiscounted: SelectedSpecialsItem[] } }, item) => {
         const category = item.category || 'Other';
         if (!groups[category]) {
-          groups[category] = [];
+          groups[category] = { discounted: [], notDiscounted: [] };
         }
-        groups[category].push({
+        const selectedItem = {
           ...item,
-          selectedQuantity: 0 // Default to 0 as requested
-        });
+          selectedQuantity: 0
+        };
+        const discountString = (item.discount || '').toLowerCase();
+        if (
+          discountString.trim() !== '' &&
+          !discountString.includes('every day') &&
+          !discountString.includes('down down')
+        ) {
+          groups[category].discounted.push(selectedItem);
+        } else {
+          groups[category].notDiscounted.push(selectedItem);
+        }
         return groups;
       }, {}) || {};
 
       console.log('Grouped items:', groupedItems);
 
-      // Convert to CategoryGroup format
-      const categoryGroupsData = Object.entries(groupedItems).map(([name, items]) => ({
+      // Convert to CategoryGroup format with subgroups
+      const categoryGroupsData = Object.entries(groupedItems).map(([name, subItems]) => ({
         name,
-        items,
-        isExpanded: false // Closed by default as requested
+        subGroups: [
+          { name: 'Discounted' as const, items: subItems.discounted, isExpanded: true },
+          { name: 'Not Discounted' as const, items: subItems.notDiscounted, isExpanded: true }
+        ].filter(sg => sg.items.length > 0), // Only include subgroups with items
+        isExpanded: false
       }));
+
 
       console.log('Category groups data:', categoryGroupsData);
       setCategoryGroups(categoryGroupsData);
@@ -111,13 +131,16 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const updateQuantity = (itemId: number, change: number) => {
     setCategoryGroups(prev => prev.map(group => ({
       ...group,
-      items: group.items.map(item => {
-        if (item.id === itemId) {
-          const newQuantity = Math.max(0, item.selectedQuantity + change);
-          return { ...item, selectedQuantity: newQuantity };
-        }
-        return item;
-      })
+      subGroups: group.subGroups.map(subGroup => ({
+        ...subGroup,
+        items: subGroup.items.map(item => {
+          if (item.id === itemId) {
+            const newQuantity = Math.max(0, item.selectedQuantity + change);
+            return { ...item, selectedQuantity: newQuantity };
+          }
+          return item;
+        })
+      }))
     })));
   };
 
@@ -127,6 +150,23 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
         ? { ...group, isExpanded: !group.isExpanded }
         : group
     ));
+  };
+
+  const toggleDiscountGroup = (categoryName: string, discountGroupName: 'Discounted' | 'Not Discounted') => {
+    setCategoryGroups(prev => prev.map(group => {
+        if (group.name === categoryName) {
+            return {
+                ...group,
+                subGroups: group.subGroups.map(subGroup => {
+                    if (subGroup.name === discountGroupName) {
+                        return { ...subGroup, isExpanded: !subGroup.isExpanded };
+                    }
+                    return subGroup;
+                })
+            };
+        }
+        return group;
+    }));
   };
 
   const formatPrice = (price: number | null, discount: string | null) => {
@@ -140,8 +180,10 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   };
 
   const addSelectedItems = async () => {
-    const selectedItems = categoryGroups.flatMap(group => 
-      group.items.filter(item => item.selectedQuantity > 0)
+    const selectedItems = categoryGroups.flatMap(group =>
+      group.subGroups.flatMap(subGroup =>
+        subGroup.items.filter(item => item.selectedQuantity > 0)
+      )
     );
 
     console.log('Selected items to add:', selectedItems);
@@ -293,7 +335,10 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       // Reset selections
       setCategoryGroups(prev => prev.map(group => ({
         ...group,
-        items: group.items.map(item => ({ ...item, selectedQuantity: 0 }))
+        subGroups: group.subGroups.map(subGroup => ({
+            ...subGroup,
+            items: subGroup.items.map(item => ({ ...item, selectedQuantity: 0 }))
+        }))
       })));
 
       // Notify parent component
@@ -313,14 +358,16 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     }
   };
 
-  const selectedCount = categoryGroups.flatMap(group => 
-    group.items.filter(item => item.selectedQuantity > 0)
+  const selectedCount = categoryGroups.flatMap(group =>
+    group.subGroups.flatMap(subGroup =>
+      subGroup.items.filter(item => item.selectedQuantity > 0)
+    )
   ).length;
 
   if (loading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>Add Specials</DialogTitle>
           </DialogHeader>
@@ -335,7 +382,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   try {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>Add Specials</DialogTitle>
             {lastUpdated && (
@@ -359,7 +406,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                         <Package className="h-4 w-4" />
                         <span className="font-medium">{group.name}</span>
                         <span className="text-sm text-muted-foreground">
-                          ({group.items.length} items)
+                          ({group.subGroups.reduce((acc, sg) => acc + sg.items.length, 0)} items)
                         </span>
                       </div>
                       {group.isExpanded ? (
@@ -369,44 +416,69 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                       )}
                     </Button>
                     {group.isExpanded && (
-                      <div className="space-y-2 mt-2 p-2">
-                        {group.items.map((item) => (
-                          <Card key={item.id} className="p-3 shadow-card">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <div className="font-medium text-sm text-foreground truncate">
-                                  {item.item}
-                                </div>
-                                {item.price && (
-                                  <div className="text-xs text-muted-foreground">
-                                    {formatPrice(item.price, item.discount)}
-                                  </div>
-                                )}
-                              </div>
+                      <div className="space-y-2 p-2">
+                        {group.subGroups.map((subGroup) => (
+                          <div key={subGroup.name}>
+                            <Button
+                              variant="ghost"
+                              className="w-full justify-between p-2 h-auto text-sm"
+                              onClick={() => toggleDiscountGroup(group.name, subGroup.name)}
+                            >
                               <div className="flex items-center gap-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => updateQuantity(item.id, -1)}
-                                  disabled={item.selectedQuantity <= 0}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Minus className="h-3 w-3" />
-                                </Button>
-                                <span className="text-sm font-medium min-w-[2rem] text-center">
-                                  {item.selectedQuantity}
+                                <span className="font-medium">{subGroup.name}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  ({subGroup.items.length} items)
                                 </span>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => updateQuantity(item.id, 1)}
-                                  className="h-8 w-8 p-0"
-                                >
-                                  <Plus className="h-3 w-3" />
-                                </Button>
                               </div>
-                            </div>
-                          </Card>
+                              {subGroup.isExpanded ? (
+                                <ChevronDown className="h-4 w-4" />
+                              ) : (
+                                <ChevronRight className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {subGroup.isExpanded && (
+                              <div className="space-y-2 mt-2 pl-4">
+                                {subGroup.items.map((item) => (
+                                  <Card key={item.id} className="p-3 shadow-card">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-medium text-sm text-foreground truncate">
+                                          {item.item}
+                                        </div>
+                                        {item.price && (
+                                          <div className="text-xs text-muted-foreground truncate">
+                                            {formatPrice(item.price, item.discount)}
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => updateQuantity(item.id, -1)}
+                                          disabled={item.selectedQuantity <= 0}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <Minus className="h-3 w-3" />
+                                        </Button>
+                                        <span className="text-sm font-medium min-w-[2rem] text-center">
+                                          {item.selectedQuantity}
+                                        </span>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={() => updateQuantity(item.id, 1)}
+                                          className="h-8 w-8 p-0"
+                                        >
+                                          <Plus className="h-3 w-3" />
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </Card>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     )}
@@ -445,7 +517,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     console.error('Error rendering SpecialsModal:', error);
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-full max-w-md">
           <DialogHeader>
             <DialogTitle>Add Specials</DialogTitle>
           </DialogHeader>
@@ -459,4 +531,4 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       </Dialog>
     );
   }
-} 
+}

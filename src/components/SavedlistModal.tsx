@@ -363,11 +363,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                       <div className="font-medium text-sm text-foreground truncate">
                         {item.Item}
                       </div>
-                      {!isEditMode && (
-                        <div className="text-xs text-muted-foreground">
-                          Default: {item.Quantity}
-                        </div>
-                      )}
+                      
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
