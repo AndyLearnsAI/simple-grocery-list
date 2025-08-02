@@ -150,7 +150,13 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             .select()
             .single();
 
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error('Error inserting item:', insertError);
+            if (insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
+              throw new Error(`Item "${selectedItem.Item}" already exists in your list. Try updating the quantity instead.`);
+            }
+            throw insertError;
+          }
           if (newItem) {
             addedItemIds.push(newItem.id);
           }

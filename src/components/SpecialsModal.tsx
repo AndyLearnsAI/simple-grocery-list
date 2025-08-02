@@ -317,7 +317,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
             .single();
 
           console.log('Insert result:', { newItem, insertError });
-          if (insertError) throw insertError;
+          if (insertError) {
+            console.error('Error inserting item:', insertError);
+            if (insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
+              throw new Error(`Item "${selectedItem.item}" already exists in your list. Try updating the quantity instead.`);
+            }
+            throw insertError;
+          }
           if (newItem) {
             addedItemIds.push(newItem.id);
           }
@@ -351,9 +357,22 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       onClose();
     } catch (error) {
       console.error('Error adding items:', error);
+      let errorMessage = "Failed to add items to grocery list";
+      
+      if (error instanceof Error) {
+        // Check for specific database errors
+        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+          errorMessage = "Some items already exist in your list. Try updating quantities instead.";
+        } else if (error.message.includes('user not authenticated')) {
+          errorMessage = "Please sign in to add items to your grocery list.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error adding items",
-        description: "Failed to add items to grocery list",
+        description: errorMessage,
         variant: "destructive",
       });
     }

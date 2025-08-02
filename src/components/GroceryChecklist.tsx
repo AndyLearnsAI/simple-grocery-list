@@ -266,9 +266,23 @@ export function GroceryChecklist() {
         description: `${newItem.trim()} added to grocery list`,
       });
     } catch (error) {
+      console.error('Error adding item:', error);
+      let errorMessage = "Failed to add item to grocery list";
+      
+      if (error instanceof Error) {
+        // Check for specific database errors
+        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+          errorMessage = "This item already exists in your list. Try updating the quantity instead.";
+        } else if (error.message.includes('user not authenticated')) {
+          errorMessage = "Please sign in to add items to your grocery list.";
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: "Error adding item",
-        description: "Failed to add item to grocery list",
+        description: errorMessage,
         variant: "destructive",
       });
     }
