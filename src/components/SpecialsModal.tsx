@@ -17,6 +17,7 @@ interface SpecialsItem {
   catalogue_date: string | null;
   on_special: boolean;
   discount_percentage: number | null;
+  img: string | null;
   user_id?: string;
 }
 
@@ -28,6 +29,7 @@ interface CategoryGroup {
   name: string;
   items: SelectedSpecialsItem[];
   isExpanded: boolean;
+  loaded: boolean;
 }
 
 interface SpecialGroup {
@@ -126,18 +128,20 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
           categories: Object.entries(groupedItems.onSpecial).map(([categoryName, items]) => ({
             name: categoryName,
             items: items,
-            isExpanded: true
+            isExpanded: false,
+            loaded: false
           })).filter(cat => cat.items.length > 0), // Only include categories with items
-          isExpanded: true
+          isExpanded: false
         },
         {
           name: 'Other',
           categories: Object.entries(groupedItems.other).map(([categoryName, items]) => ({
             name: categoryName,
             items: items,
-            isExpanded: true
+            isExpanded: false,
+            loaded: false
           })).filter(cat => cat.items.length > 0), // Only include categories with items
-          isExpanded: true
+          isExpanded: false
         }
       ].filter(group => group.categories.length > 0); // Only include groups with categories
 
@@ -195,7 +199,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 ...group,
                 categories: group.categories.map(category => {
                     if (category.name === categoryName) {
-                        return { ...category, isExpanded: !category.isExpanded };
+                        return { 
+                            ...category, 
+                            isExpanded: !category.isExpanded,
+                            loaded: category.loaded || !category.isExpanded // Set loaded to true when expanding
+                        };
                     }
                     return category;
                 })
@@ -462,11 +470,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                 <ChevronRight className="h-4 w-4 flex-shrink-0" />
                               )}
                             </Button>
-                            {category.isExpanded && (
+                            {category.isExpanded && category.loaded && (
                               <div className="space-y-2 mt-2 pl-4">
                                 {category.items.map((item) => (
                                   <Card key={item.id} className="p-3 shadow-card">
                                     <div className="flex items-center justify-between gap-3">
+                                      {/* Image on the left */}
+                                      {item.img && (
+                                        <div className="flex-shrink-0 w-12 h-12">
+                                          <img 
+                                            src={item.img} 
+                                            alt={item.item}
+                                            className="w-full h-full object-cover rounded-md"
+                                            onError={(e) => {
+                                              // Hide image if it fails to load
+                                              e.currentTarget.style.display = 'none';
+                                            }}
+                                          />
+                                        </div>
+                                      )}
                                       <div className="flex-1 min-w-0">
                                         <TooltipProvider>
                                           <Tooltip>

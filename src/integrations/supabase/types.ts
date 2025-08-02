@@ -101,6 +101,7 @@ export type Database = {
           catalogue_date: string | null
           on_special: boolean
           discount_percentage: number | null
+          img: string | null
         }
         Insert: {
           created_at?: string
@@ -113,6 +114,7 @@ export type Database = {
           catalogue_date?: string | null
           on_special?: boolean
           discount_percentage?: number | null
+          img?: string | null
         }
         Update: {
           created_at?: string
@@ -125,6 +127,7 @@ export type Database = {
           catalogue_date?: string | null
           on_special?: boolean
           discount_percentage?: number | null
+          img?: string | null
         }
         Relationships: []
       }
