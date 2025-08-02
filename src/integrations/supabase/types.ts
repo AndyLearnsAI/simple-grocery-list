@@ -96,9 +96,11 @@ export type Database = {
           item: string
           quantity: number
           category: string | null
-          price: number | null
+          price: string | null
           discount: string | null
           catalogue_date: string | null
+          on_special: boolean
+          discount_percentage: number | null
         }
         Insert: {
           created_at?: string
@@ -106,9 +108,11 @@ export type Database = {
           item: string
           quantity?: number
           category?: string | null
-          price?: number | null
+          price?: string | null
           discount?: string | null
           catalogue_date?: string | null
+          on_special?: boolean
+          discount_percentage?: number | null
         }
         Update: {
           created_at?: string
@@ -116,9 +120,11 @@ export type Database = {
           item?: string
           quantity?: number
           category?: string | null
-          price?: number | null
+          price?: string | null
           discount?: string | null
           catalogue_date?: string | null
+          on_special?: boolean
+          discount_percentage?: number | null
         }
         Relationships: []
       }

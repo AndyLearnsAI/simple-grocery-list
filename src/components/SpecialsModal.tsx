@@ -12,9 +12,11 @@ interface SpecialsItem {
   item: string;
   quantity: number;
   category: string | null;
-  price: number | null;
+  price: string | null;
   discount: string | null;
   catalogue_date: string | null;
+  on_special: boolean;
+  discount_percentage: number | null;
   user_id?: string;
 }
 
@@ -22,15 +24,15 @@ interface SelectedSpecialsItem extends SpecialsItem {
   selectedQuantity: number;
 }
 
-interface DiscountGroup {
-  name: 'Discounted' | 'Not Discounted';
+interface CategoryGroup {
+  name: string;
   items: SelectedSpecialsItem[];
   isExpanded: boolean;
 }
 
-interface CategoryGroup {
-  name: string;
-  subGroups: DiscountGroup[];
+interface SpecialGroup {
+  name: 'On Special' | 'Other';
+  categories: CategoryGroup[];
   isExpanded: boolean;
 }
 
@@ -41,7 +43,7 @@ interface SpecialsModalProps {
 }
 
 export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalProps) {
-  const [categoryGroups, setCategoryGroups] = useState<CategoryGroup[]>([]);
+  const [categoryGroups, setCategoryGroups] = useState<SpecialGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const { toast } = useToast();
@@ -55,6 +57,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const fetchSpecialsItems = async () => {
     try {
       console.log('Fetching specials items...');
+      
       const { data, error } = await supabase
         .from('specials')
         .select('*')
@@ -64,7 +67,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
       if (error) {
         console.error('Supabase error:', error);
-        throw error;
+        throw new Error(`Failed to fetch specials: ${error.message}`);
+      }
+
+      if (!data || data.length === 0) {
+        throw new Error('No specials data found. Please check if the table has data.');
       }
 
       console.log('Fetched data:', data);
@@ -78,50 +85,78 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
         setLastUpdated(earliestDate);
       }
 
-      // Group items by category and then by discount status
-      const groupedItems = data?.reduce((groups: { [key: string]: { discounted: SelectedSpecialsItem[], notDiscounted: SelectedSpecialsItem[] } }, item) => {
+      // Group items by on_special status first, then by category
+      const groupedItems = data?.reduce((groups: { onSpecial: { [key: string]: SelectedSpecialsItem[] }, other: { [key: string]: SelectedSpecialsItem[] } }, item) => {
         const category = item.category || 'Other';
-        if (!groups[category]) {
-          groups[category] = { discounted: [], notDiscounted: [] };
-        }
         const selectedItem = {
           ...item,
           selectedQuantity: 0
         };
-        const discountString = (item.discount || '').toLowerCase();
-        if (
-          discountString.trim() !== '' &&
-          !discountString.includes('every day') &&
-          !discountString.includes('down down')
-        ) {
-          groups[category].discounted.push(selectedItem);
+        
+        // Check if on_special property exists
+        if (typeof item.on_special === 'boolean') {
+          if (item.on_special) {
+            if (!groups.onSpecial[category]) {
+              groups.onSpecial[category] = [];
+            }
+            groups.onSpecial[category].push(selectedItem);
+          } else {
+            if (!groups.other[category]) {
+              groups.other[category] = [];
+            }
+            groups.other[category].push(selectedItem);
+          }
         } else {
-          groups[category].notDiscounted.push(selectedItem);
+          console.warn('Item missing on_special property:', item);
+          // Default to 'other' if on_special is not defined
+          if (!groups.other[category]) {
+            groups.other[category] = [];
+          }
+          groups.other[category].push(selectedItem);
         }
         return groups;
-      }, {}) || {};
+      }, { onSpecial: {}, other: {} }) || { onSpecial: {}, other: {} };
 
       console.log('Grouped items:', groupedItems);
 
-      // Convert to CategoryGroup format with subgroups
-      const categoryGroupsData = Object.entries(groupedItems).map(([name, subItems]) => ({
-        name,
-        subGroups: [
-          { name: 'Discounted' as const, items: subItems.discounted, isExpanded: true },
-          { name: 'Not Discounted' as const, items: subItems.notDiscounted, isExpanded: true }
-        ].filter(sg => sg.items.length > 0), // Only include subgroups with items
-        isExpanded: false
-      }));
+      // Convert to SpecialGroup format with categories
+      const specialGroupsData: SpecialGroup[] = [
+        {
+          name: 'On Special',
+          categories: Object.entries(groupedItems.onSpecial).map(([categoryName, items]) => ({
+            name: categoryName,
+            items: items,
+            isExpanded: true
+          })).filter(cat => cat.items.length > 0), // Only include categories with items
+          isExpanded: true
+        },
+        {
+          name: 'Other',
+          categories: Object.entries(groupedItems.other).map(([categoryName, items]) => ({
+            name: categoryName,
+            items: items,
+            isExpanded: true
+          })).filter(cat => cat.items.length > 0), // Only include categories with items
+          isExpanded: true
+        }
+      ].filter(group => group.categories.length > 0); // Only include groups with categories
 
 
-      console.log('Category groups data:', categoryGroupsData);
-      setCategoryGroups(categoryGroupsData);
+      console.log('Special groups data:', specialGroupsData);
+      setCategoryGroups(specialGroupsData);
     } catch (error) {
       console.error('Error fetching specials items:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      let errorMessage = 'Unknown error occurred';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
       toast({
-        title: "Error loading specials items",
-        description: `Failed to load specials items: ${errorMessage}`,
+        title: "Error loading specials modal",
+        description: `Please try again. ${errorMessage}`,
         variant: "destructive",
       });
     } finally {
@@ -132,9 +167,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const updateQuantity = (itemId: number, change: number) => {
     setCategoryGroups(prev => prev.map(group => ({
       ...group,
-      subGroups: group.subGroups.map(subGroup => ({
-        ...subGroup,
-        items: subGroup.items.map(item => {
+      categories: group.categories.map(category => ({
+        ...category,
+        items: category.items.map(item => {
           if (item.id === itemId) {
             const newQuantity = Math.max(0, item.selectedQuantity + change);
             return { ...item, selectedQuantity: newQuantity };
@@ -145,24 +180,24 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     })));
   };
 
-  const toggleCategory = (categoryName: string) => {
+  const toggleSpecialGroup = (specialGroupName: 'On Special' | 'Other') => {
     setCategoryGroups(prev => prev.map(group => 
-      group.name === categoryName 
+      group.name === specialGroupName 
         ? { ...group, isExpanded: !group.isExpanded }
         : group
     ));
   };
 
-  const toggleDiscountGroup = (categoryName: string, discountGroupName: 'Discounted' | 'Not Discounted') => {
+  const toggleCategory = (specialGroupName: 'On Special' | 'Other', categoryName: string) => {
     setCategoryGroups(prev => prev.map(group => {
-        if (group.name === categoryName) {
+        if (group.name === specialGroupName) {
             return {
                 ...group,
-                subGroups: group.subGroups.map(subGroup => {
-                    if (subGroup.name === discountGroupName) {
-                        return { ...subGroup, isExpanded: !subGroup.isExpanded };
+                categories: group.categories.map(category => {
+                    if (category.name === categoryName) {
+                        return { ...category, isExpanded: !category.isExpanded };
                     }
-                    return subGroup;
+                    return category;
                 })
             };
         }
@@ -170,20 +205,18 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     }));
   };
 
-  const formatPrice = (price: number | null, discount: string | null) => {
+  const formatPrice = (price: string | null, discount: string | null) => {
     if (!price) return '';
     
-    const priceStr = `$${price.toFixed(2)}`;
+    if (!discount) return price;
     
-    if (!discount) return priceStr;
-    
-    return `${priceStr} (${discount})`;
+    return `${price} (${discount})`;
   };
 
   const addSelectedItems = async () => {
     const selectedItems = categoryGroups.flatMap(group =>
-      group.subGroups.flatMap(subGroup =>
-        subGroup.items.filter(item => item.selectedQuantity > 0)
+      group.categories.flatMap(category =>
+        category.items.filter(item => item.selectedQuantity > 0)
       )
     );
 
@@ -206,40 +239,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       }
 
       console.log('Current user:', user.data.user.id);
-
-      // Test basic database connectivity
-      console.log('Testing database connectivity...');
-      const { data: testData, error: testError } = await supabase
-        .from('Grocery list')
-        .select('count')
-        .limit(1);
-      
-      console.log('Database connectivity test:', { testData, testError });
-
-      // Test insert capability
-      console.log('Testing insert capability...');
-      const { data: testInsert, error: testInsertError } = await supabase
-        .from('Grocery list')
-        .insert([
-          {
-            Item: 'TEST_ITEM_DELETE_ME',
-            Quantity: 1,
-            user_id: user.data.user.id
-          }
-        ])
-        .select()
-        .single();
-      
-      console.log('Test insert result:', { testInsert, testInsertError });
-      
-      // Clean up test item
-      if (testInsert) {
-        const { error: cleanupError } = await supabase
-          .from('Grocery list')
-          .delete()
-          .eq('id', testInsert.id);
-        console.log('Cleanup error:', cleanupError);
-      }
 
       // Helper function for case-insensitive comparison
       const normalizeItemName = (name: string) => name.toLowerCase().trim();
@@ -342,9 +341,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       // Reset selections
       setCategoryGroups(prev => prev.map(group => ({
         ...group,
-        subGroups: group.subGroups.map(subGroup => ({
-            ...subGroup,
-            items: subGroup.items.map(item => ({ ...item, selectedQuantity: 0 }))
+        categories: group.categories.map(category => ({
+            ...category,
+            items: category.items.map(item => ({ ...item, selectedQuantity: 0 }))
         }))
       })));
 
@@ -379,8 +378,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   };
 
   const selectedCount = categoryGroups.flatMap(group =>
-    group.subGroups.flatMap(subGroup =>
-      subGroup.items.filter(item => item.selectedQuantity > 0)
+    group.categories.flatMap(category =>
+      category.items.filter(item => item.selectedQuantity > 0)
     )
   ).length;
 
@@ -420,13 +419,19 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                     <Button 
                       variant="ghost" 
                       className="w-full justify-between p-2 h-auto"
-                      onClick={() => toggleCategory(group.name)}
+                      onClick={() => toggleSpecialGroup(group.name)}
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <Package className="h-4 w-4 flex-shrink-0" />
-                        <span className="font-medium truncate">{group.name}</span>
+                        {group.name === 'On Special' ? (
+                          <span className="font-medium truncate text-red-600 flex items-center gap-1">
+                            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                            {group.name}
+                          </span>
+                        ) : (
+                          <span className="font-medium truncate">{group.name}</span>
+                        )}
                         <span className="text-sm text-muted-foreground flex-shrink-0">
-                          ({group.subGroups.reduce((acc, sg) => acc + sg.items.length, 0)} items)
+                          ({group.categories.reduce((acc, cat) => acc + cat.items.length, 0)} items)
                         </span>
                       </div>
                       {group.isExpanded ? (
@@ -437,28 +442,29 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                     </Button>
                     {group.isExpanded && (
                       <div className="space-y-2 p-2">
-                        {group.subGroups.map((subGroup) => (
-                          <div key={subGroup.name}>
+                        {group.categories.map((category) => (
+                          <div key={category.name}>
                             <Button
                               variant="ghost"
                               className="w-full justify-between p-2 h-auto text-sm"
-                              onClick={() => toggleDiscountGroup(group.name, subGroup.name)}
+                              onClick={() => toggleCategory(group.name, category.name)}
                             >
                               <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <span className="font-medium truncate">{subGroup.name}</span>
+                                <Package className="h-4 w-4 flex-shrink-0" />
+                                <span className="font-medium truncate">{category.name}</span>
                                 <span className="text-xs text-muted-foreground flex-shrink-0">
-                                  ({subGroup.items.length} items)
+                                  ({category.items.length} items)
                                 </span>
                               </div>
-                              {subGroup.isExpanded ? (
+                              {category.isExpanded ? (
                                 <ChevronDown className="h-4 w-4 flex-shrink-0" />
                               ) : (
                                 <ChevronRight className="h-4 w-4 flex-shrink-0" />
                               )}
                             </Button>
-                            {subGroup.isExpanded && (
+                            {category.isExpanded && (
                               <div className="space-y-2 mt-2 pl-4">
-                                {subGroup.items.map((item) => (
+                                {category.items.map((item) => (
                                   <Card key={item.id} className="p-3 shadow-card">
                                     <div className="flex items-center justify-between gap-3">
                                       <div className="flex-1 min-w-0">
