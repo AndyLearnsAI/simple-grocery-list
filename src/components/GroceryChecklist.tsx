@@ -97,6 +97,7 @@ export function GroceryChecklist() {
       setItems(formattedItems);
       console.log('Set items:', formattedItems); // Debug log
     } catch (error) {
+      console.error('Error fetching items:', error);
       toast({
         title: "Error loading items",
         description: "Failed to load grocery list from database",
@@ -110,11 +111,18 @@ export function GroceryChecklist() {
   const handleReorder = async (newItems: GroceryItem[]) => {
     setItems(newItems);
     // Update sort order in database
-    updateSortOrder(newItems);
+    await updateSortOrder(newItems);
+    
+    // Show success message
+    toast({
+      title: "List reordered!",
+      description: "Your grocery list has been reordered successfully",
+    });
   };
 
   const updateSortOrder = async (newItems: GroceryItem[]) => {
     try {
+      // Try to update sort_order if the column exists
       const updates = newItems.map((item, index) => ({
         id: item.id,
         sort_order: index + 1,
@@ -125,9 +133,9 @@ export function GroceryChecklist() {
         .upsert(updates, { onConflict: 'id' });
 
       if (error) {
-        // If sort_order column doesn't exist, just log the error but don't show toast
+        // If sort_order column doesn't exist, that's okay - just log it
         if (error.message.includes('column "sort_order" does not exist')) {
-          console.log('sort_order column not available, order changes will not be persisted');
+          console.log('sort_order column not available, order changes will not be persisted to database');
           return;
         }
         
@@ -137,12 +145,14 @@ export function GroceryChecklist() {
           description: "Failed to save the new order",
           variant: "destructive",
         });
+      } else {
+        console.log('Successfully updated sort order in database');
       }
     } catch (error) {
       console.error('Error updating sort order:', error);
       // Don't show error toast if it's just that sort_order column doesn't exist
       if (error instanceof Error && error.message.includes('column "sort_order" does not exist')) {
-        console.log('sort_order column not available, order changes will not be persisted');
+        console.log('sort_order column not available, order changes will not be persisted to database');
         return;
       }
       toast({
@@ -316,9 +326,12 @@ export function GroceryChecklist() {
           user_id: user.id,
         };
         
-        // Only add sort_order if we have items (indicating the column might exist)
-        if (items.length > 0) {
+        // Try to add sort_order, but don't fail if the column doesn't exist
+        try {
           insertData.sort_order = maxSortOrder + 1;
+        } catch (e) {
+          // sort_order column doesn't exist, that's okay
+          console.log('sort_order column not available for new items');
         }
         
         const { data, error } = await supabase
@@ -918,7 +931,7 @@ export function GroceryChecklist() {
             {isReorderMode && items.length > 0 && (
               <div className="text-sm text-primary mb-3 flex items-center gap-2 font-medium bg-primary/5 p-2 rounded-lg border border-primary/20">
                 <Move className="h-4 w-4" />
-                <span>Use the ↑↓ buttons to reorder items</span>
+                <span>Click the ↑↓ buttons to move items up or down</span>
               </div>
             )}
             <SimpleGroceryReorder
