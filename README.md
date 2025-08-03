@@ -59,6 +59,15 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- @dnd-kit (for drag-and-drop functionality)
+
+## Features
+
+### Grocery List Management
+- **Drag-and-Drop Reordering**: Users can drag items by the grip handle to reorder their grocery list
+- **Real-time Updates**: Changes are automatically saved to the database
+- **Touch Support**: Works on both desktop and mobile devices
+- **Visual Feedback**: Clear indicators show when items are being dragged
 
 ## How can I deploy this project?
 
