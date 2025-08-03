@@ -89,32 +89,32 @@ function SortableItem({
     transition,
     opacity: isDragging ? 0.5 : 1,
     zIndex: isDragging ? 1000 : 'auto',
+    boxShadow: isDragging ? '0 10px 25px rgba(0, 0, 0, 0.15)' : 'none',
   };
 
   return (
     <Card
       ref={isReorderMode ? setNodeRef : undefined}
       style={{ ...getSwipeStyle(item.id), ...style }}
-      className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
+      className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
+        isReorderMode ? 'select-none touch-manipulation cursor-grab active:cursor-grabbing' : ''
+      }`}
       onTouchStart={(e) => handleTouchStart(e, item.id)}
       onTouchMove={(e) => handleTouchMove(e, item.id)}
       onTouchEnd={() => handleTouchEnd(item.id)}
+      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
     >
       {getSwipeIndicator(item.id)}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
           {isReorderMode ? (
             // Reorder mode: Show drag handle instead of checkbox
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing transition-colors"
-              {...attributes}
-              {...listeners}
+            <div
+              className="h-8 w-8 flex items-center justify-center text-primary bg-primary/10 rounded-full border border-primary/20"
               title="Drag to reorder"
             >
-              <Move className="h-3 w-3" />
-            </Button>
+              <Move className="h-4 w-4" />
+            </div>
           ) : (
             // Normal mode: Show checkbox
             <Button
@@ -202,7 +202,8 @@ export function GroceryChecklist() {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 8,
+        distance: 3,
+        tolerance: 5,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -1080,9 +1081,9 @@ export function GroceryChecklist() {
           {/* Grocery List Items */}
           <div className="space-y-2">
             {isReorderMode && items.length > 0 && (
-              <div className="text-xs text-primary mb-2 flex items-center gap-1 font-medium">
-                <Move className="h-3 w-3" />
-                Reorder mode active - drag items to reorder your list
+              <div className="text-sm text-primary mb-3 flex items-center gap-2 font-medium bg-primary/5 p-2 rounded-lg border border-primary/20">
+                <Move className="h-4 w-4" />
+                <span>Touch and drag items to reorder your list</span>
               </div>
             )}
             {isReorderMode ? (
