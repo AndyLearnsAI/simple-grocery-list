@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, Move } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,6 +60,7 @@ interface SortableItemProps {
   handleTouchStart: (e: React.TouchEvent, itemId: number) => void;
   handleTouchMove: (e: React.TouchEvent, itemId: number) => void;
   handleTouchEnd: (itemId: number) => void;
+  isReorderMode: boolean;
 }
 
 function SortableItem({
@@ -72,6 +73,7 @@ function SortableItem({
   handleTouchStart,
   handleTouchMove,
   handleTouchEnd,
+  isReorderMode,
 }: SortableItemProps) {
   const {
     attributes,
@@ -80,7 +82,7 @@ function SortableItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({ id: item.id, disabled: !isReorderMode });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -91,7 +93,7 @@ function SortableItem({
 
   return (
     <Card
-      ref={setNodeRef}
+      ref={isReorderMode ? setNodeRef : undefined}
       style={{ ...getSwipeStyle(item.id), ...style }}
       className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
       onTouchStart={(e) => handleTouchStart(e, item.id)}
@@ -101,18 +103,33 @@ function SortableItem({
       {getSwipeIndicator(item.id)}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onToggle(item.id)}
-            className={`h-6 w-6 p-0 rounded-full border-2 ${
-              item.checked 
-                ? 'bg-primary border-primary text-primary-foreground' 
-                : 'border-muted-foreground/20 hover:border-primary'
-            }`}
-          >
-            {item.checked && <Check className="h-3 w-3" />}
-          </Button>
+          {isReorderMode ? (
+            // Reorder mode: Show drag handle instead of checkbox
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing transition-colors"
+              {...attributes}
+              {...listeners}
+              title="Drag to reorder"
+            >
+              <Move className="h-3 w-3" />
+            </Button>
+          ) : (
+            // Normal mode: Show checkbox
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggle(item.id)}
+              className={`h-6 w-6 p-0 rounded-full border-2 ${
+                item.checked 
+                  ? 'bg-primary border-primary text-primary-foreground' 
+                  : 'border-muted-foreground/20 hover:border-primary'
+              }`}
+            >
+              {item.checked && <Check className="h-3 w-3" />}
+            </Button>
+          )}
           <div className="flex-1 min-w-0">
             <div className={`font-medium text-sm ${
               item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
@@ -121,46 +138,38 @@ function SortableItem({
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.Quantity <= 1}
-            className="h-8 w-8 p-0"
-          >
-            <Minus className="h-3 w-3" />
-          </Button>
-          <span className="text-sm font-medium min-w-[2rem] text-center">
-            {item.Quantity}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, 1)}
-            className="h-8 w-8 p-0"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRemove(item.id)}
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-primary cursor-grab active:cursor-grabbing transition-colors"
-            {...attributes}
-            {...listeners}
-            title="Drag to reorder"
-          >
-            <GripVertical className="h-4 w-4" />
-          </Button>
-        </div>
+        {!isReorderMode && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, -1)}
+              disabled={item.Quantity <= 1}
+              className="h-8 w-8 p-0"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-sm font-medium min-w-[2rem] text-center">
+              {item.Quantity}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, 1)}
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(item.id)}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -186,6 +195,7 @@ export function GroceryChecklist() {
   }>({});
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const { toast } = useToast();
 
   // Drag and drop sensors
@@ -1069,37 +1079,56 @@ export function GroceryChecklist() {
 
           {/* Grocery List Items */}
           <div className="space-y-2">
-            {items.length > 0 && (
-              <div className="text-xs text-muted-foreground mb-2 flex items-center gap-1">
-                <GripVertical className="h-3 w-3" />
-                Drag items to reorder your list
+            {isReorderMode && items.length > 0 && (
+              <div className="text-xs text-primary mb-2 flex items-center gap-1 font-medium">
+                <Move className="h-3 w-3" />
+                Reorder mode active - drag items to reorder your list
               </div>
             )}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={items.map(item => item.id)}
-                strategy={verticalListSortingStrategy}
+            {isReorderMode ? (
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
               >
-                {items.map((item) => (
-                  <SortableItem
-                    key={item.id}
-                    item={item}
-                    onToggle={toggleItem}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeItem}
-                    getSwipeStyle={getSwipeStyle}
-                    getSwipeIndicator={getSwipeIndicator}
-                    handleTouchStart={handleTouchStart}
-                    handleTouchMove={handleTouchMove}
-                    handleTouchEnd={handleTouchEnd}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
+                <SortableContext
+                  items={items.map(item => item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {items.map((item) => (
+                    <SortableItem
+                      key={item.id}
+                      item={item}
+                      onToggle={toggleItem}
+                      onUpdateQuantity={updateQuantity}
+                      onRemove={removeItem}
+                      getSwipeStyle={getSwipeStyle}
+                      getSwipeIndicator={getSwipeIndicator}
+                      handleTouchStart={handleTouchStart}
+                      handleTouchMove={handleTouchMove}
+                      handleTouchEnd={handleTouchEnd}
+                      isReorderMode={isReorderMode}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
+            ) : (
+              items.map((item) => (
+                <SortableItem
+                  key={item.id}
+                  item={item}
+                  onToggle={toggleItem}
+                  onUpdateQuantity={updateQuantity}
+                  onRemove={removeItem}
+                  getSwipeStyle={getSwipeStyle}
+                  getSwipeIndicator={getSwipeIndicator}
+                  handleTouchStart={handleTouchStart}
+                  handleTouchMove={handleTouchMove}
+                  handleTouchEnd={handleTouchEnd}
+                  isReorderMode={isReorderMode}
+                />
+              ))
+            )}
 
             {/* Empty State */}
             {items.length === 0 && (
@@ -1132,6 +1161,26 @@ export function GroceryChecklist() {
               className="flex-1"
             >
               Add Specials
+            </Button>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant={isReorderMode ? "default" : "outline"}
+              size="sm"
+              onClick={() => setIsReorderMode(!isReorderMode)}
+              className="flex-1"
+            >
+              {isReorderMode ? (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Done Reordering
+                </>
+              ) : (
+                <>
+                  <Move className="h-4 w-4 mr-2" />
+                  Reorder List
+                </>
+              )}
             </Button>
           </div>
         </div>
