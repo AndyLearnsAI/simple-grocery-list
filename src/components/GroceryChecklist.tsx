@@ -95,25 +95,26 @@ function SortableItem({
   return (
     <Card
       ref={isReorderMode ? setNodeRef : undefined}
-      style={{ ...getSwipeStyle(item.id), ...style }}
+      style={isReorderMode ? style : { ...getSwipeStyle(item.id), ...style }}
       className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isReorderMode ? 'select-none touch-manipulation cursor-grab active:cursor-grabbing' : ''
+        isReorderMode ? 'select-none touch-manipulation' : ''
       }`}
-      onTouchStart={(e) => handleTouchStart(e, item.id)}
-      onTouchMove={(e) => handleTouchMove(e, item.id)}
-      onTouchEnd={() => handleTouchEnd(item.id)}
-      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
-    >
-      {getSwipeIndicator(item.id)}
-      <div className="flex items-center justify-between">
+      onTouchStart={isReorderMode ? undefined : (e) => handleTouchStart(e, item.id)}
+      onTouchMove={isReorderMode ? undefined : (e) => handleTouchMove(e, item.id)}
+      onTouchEnd={isReorderMode ? undefined : () => handleTouchEnd(item.id)}
+          >
+        {!isReorderMode && getSwipeIndicator(item.id)}
+        <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
           {isReorderMode ? (
             // Reorder mode: Show drag handle instead of checkbox
             <div
-              className="h-8 w-8 flex items-center justify-center text-primary bg-primary/10 rounded-full border border-primary/20"
+              className="h-10 w-10 flex items-center justify-center text-primary bg-primary/20 rounded-full border-2 border-primary/30 cursor-grab active:cursor-grabbing touch-manipulation"
+              {...attributes}
+              {...listeners}
               title="Drag to reorder"
             >
-              <Move className="h-4 w-4" />
+              <Move className="h-5 w-5" />
             </div>
           ) : (
             // Normal mode: Show checkbox
@@ -1083,7 +1084,7 @@ export function GroceryChecklist() {
             {isReorderMode && items.length > 0 && (
               <div className="text-sm text-primary mb-3 flex items-center gap-2 font-medium bg-primary/5 p-2 rounded-lg border border-primary/20">
                 <Move className="h-4 w-4" />
-                <span>Touch and drag items to reorder your list</span>
+                <span>Touch and drag the ⋮⋮ handle to reorder items</span>
               </div>
             )}
             {isReorderMode ? (
