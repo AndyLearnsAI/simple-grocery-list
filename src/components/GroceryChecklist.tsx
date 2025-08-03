@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, Move } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, Move } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,25 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import {
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SimpleGroceryReorder } from "./SimpleGroceryReorder";
 
 interface GroceryItem {
   id: number;
@@ -49,131 +31,7 @@ interface DeletedItem extends GroceryItem {
   addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
 }
 
-// Sortable Item Component
-interface SortableItemProps {
-  item: GroceryItem;
-  onToggle: (id: number) => void;
-  onUpdateQuantity: (id: number, change: number) => void;
-  onRemove: (id: number) => void;
-  getSwipeStyle: (itemId: number) => React.CSSProperties;
-  getSwipeIndicator: (itemId: number) => React.ReactNode;
-  handleTouchStart: (e: React.TouchEvent, itemId: number) => void;
-  handleTouchMove: (e: React.TouchEvent, itemId: number) => void;
-  handleTouchEnd: (itemId: number) => void;
-  isReorderMode: boolean;
-}
 
-function SortableItem({
-  item,
-  onToggle,
-  onUpdateQuantity,
-  onRemove,
-  getSwipeStyle,
-  getSwipeIndicator,
-  handleTouchStart,
-  handleTouchMove,
-  handleTouchEnd,
-  isReorderMode,
-}: SortableItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1000 : 'auto',
-    boxShadow: isDragging ? '0 10px 25px rgba(0, 0, 0, 0.15)' : 'none',
-  };
-
-    return (
-    <Card
-      ref={setNodeRef}
-      style={isReorderMode ? style : { ...getSwipeStyle(item.id), ...style }}
-      className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isReorderMode ? 'select-none touch-manipulation cursor-grab active:cursor-grabbing' : ''
-      }`}
-      onTouchStart={isReorderMode ? undefined : (e) => handleTouchStart(e, item.id)}
-      onTouchMove={isReorderMode ? undefined : (e) => handleTouchMove(e, item.id)}
-      onTouchEnd={isReorderMode ? undefined : () => handleTouchEnd(item.id)}
-      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
-    >
-      {!isReorderMode && getSwipeIndicator(item.id)}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1">
-          {isReorderMode ? (
-            // Reorder mode: Show drag handle instead of checkbox
-            <div
-              className="h-12 w-12 flex items-center justify-center text-primary bg-primary/30 rounded-full border-2 border-primary/50 cursor-grab active:cursor-grabbing touch-manipulation shadow-sm"
-              title="Drag to reorder"
-            >
-              <Move className="h-6 w-6" />
-            </div>
-          ) : (
-            // Normal mode: Show checkbox
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggle(item.id)}
-              className={`h-6 w-6 p-0 rounded-full border-2 ${
-                item.checked 
-                  ? 'bg-primary border-primary text-primary-foreground' 
-                  : 'border-muted-foreground/20 hover:border-primary'
-              }`}
-            >
-              {item.checked && <Check className="h-3 w-3" />}
-            </Button>
-          )}
-          <div className="flex-1 min-w-0">
-            <div className={`font-medium text-sm ${
-              item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-            }`}>
-              {item.Item}
-            </div>
-          </div>
-        </div>
-        {!isReorderMode && (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUpdateQuantity(item.id, -1)}
-              disabled={item.Quantity <= 1}
-              className="h-8 w-8 p-0"
-            >
-              <Minus className="h-3 w-3" />
-            </Button>
-            <span className="text-sm font-medium min-w-[2rem] text-center">
-              {item.Quantity}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUpdateQuantity(item.id, 1)}
-              className="h-8 w-8 p-0"
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onRemove(item.id)}
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-      </div>
-    </Card>
-  );
-}
 
 export function GroceryChecklist() {
   const [items, setItems] = useState<GroceryItem[]>([]);
@@ -198,18 +56,7 @@ export function GroceryChecklist() {
   const [isReorderMode, setIsReorderMode] = useState(false);
   const { toast } = useToast();
 
-  // Drag and drop sensors
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 3,
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+
 
   // Fetch items from Supabase
   useEffect(() => {
@@ -260,26 +107,10 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    
-    console.log('🎯 Drag end:', { active: active.id, over: over?.id, isReorderMode });
-
-    if (active.id !== over?.id) {
-      setItems((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over?.id);
-
-        console.log('🔄 Reordering:', { oldIndex, newIndex, itemName: items[oldIndex]?.Item });
-
-        const newItems = arrayMove(items, oldIndex, newIndex);
-        
-        // Update sort order in database
-        updateSortOrder(newItems);
-        
-        return newItems;
-      });
-    }
+  const handleReorder = async (newItems: GroceryItem[]) => {
+    setItems(newItems);
+    // Update sort order in database
+    updateSortOrder(newItems);
   };
 
   const updateSortOrder = async (newItems: GroceryItem[]) => {
@@ -1087,38 +918,17 @@ export function GroceryChecklist() {
             {isReorderMode && items.length > 0 && (
               <div className="text-sm text-primary mb-3 flex items-center gap-2 font-medium bg-primary/5 p-2 rounded-lg border border-primary/20">
                 <Move className="h-4 w-4" />
-                <span>Touch and drag the ⋮⋮ handle to reorder items</span>
+                <span>Use the ↑↓ buttons to reorder items</span>
               </div>
             )}
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragStart={(event) => {
-                console.log('🎯 Drag start:', event);
-              }}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={items.map(item => item.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {items.map((item) => (
-                  <SortableItem
-                    key={item.id}
-                    item={item}
-                    onToggle={toggleItem}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeItem}
-                    getSwipeStyle={getSwipeStyle}
-                    getSwipeIndicator={getSwipeIndicator}
-                    handleTouchStart={handleTouchStart}
-                    handleTouchMove={handleTouchMove}
-                    handleTouchEnd={handleTouchEnd}
-                    isReorderMode={isReorderMode}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
+            <SimpleGroceryReorder
+              items={items}
+              onReorder={handleReorder}
+              onToggle={toggleItem}
+              onUpdateQuantity={updateQuantity}
+              onRemove={removeItem}
+              isReorderMode={isReorderMode}
+            />
 
             {/* Empty State */}
             {items.length === 0 && (
