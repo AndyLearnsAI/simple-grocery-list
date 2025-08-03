@@ -9,7 +9,25 @@ import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
-import { SimpleGroceryReorder } from "./SimpleGroceryReorder";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface GroceryItem {
   id: number;
@@ -29,6 +47,118 @@ interface DeletedItem extends GroceryItem {
   originalQuantity?: number;
   addedItemIds?: number[];
   addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
+}
+
+// Sortable Item Component
+interface SortableItemProps {
+  item: GroceryItem;
+  onToggle: (id: number) => void;
+  onUpdateQuantity: (id: number, change: number) => void;
+  onRemove: (id: number) => void;
+  getSwipeStyle: (itemId: number) => React.CSSProperties;
+  getSwipeIndicator: (itemId: number) => React.ReactNode;
+  handleTouchStart: (e: React.TouchEvent, itemId: number) => void;
+  handleTouchMove: (e: React.TouchEvent, itemId: number) => void;
+  handleTouchEnd: (itemId: number) => void;
+}
+
+function SortableItem({
+  item,
+  onToggle,
+  onUpdateQuantity,
+  onRemove,
+  getSwipeStyle,
+  getSwipeIndicator,
+  handleTouchStart,
+  handleTouchMove,
+  handleTouchEnd,
+}: SortableItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 1000 : 'auto',
+    boxShadow: isDragging ? '0 10px 25px rgba(0, 0, 0, 0.15)' : 'none',
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={{ ...getSwipeStyle(item.id), ...style }}
+      className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
+      onTouchStart={(e) => handleTouchStart(e, item.id)}
+      onTouchMove={(e) => handleTouchMove(e, item.id)}
+      onTouchEnd={() => handleTouchEnd(item.id)}
+    >
+      {getSwipeIndicator(item.id)}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 flex-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onToggle(item.id)}
+            className={`h-6 w-6 p-0 rounded-full border-2 ${
+              item.checked 
+                ? 'bg-primary border-primary text-primary-foreground' 
+                : 'border-muted-foreground/20 hover:border-primary'
+            }`}
+          >
+            {item.checked && <Check className="h-3 w-3" />}
+          </Button>
+          <div 
+            className="flex-1 min-w-0 cursor-grab active:cursor-grabbing"
+            {...attributes}
+            {...listeners}
+          >
+            <div className={`font-medium text-sm ${
+              item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+            }`}>
+              {item.Item}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdateQuantity(item.id, -1)}
+            disabled={item.Quantity <= 1}
+            className="h-8 w-8 p-0"
+          >
+            <Minus className="h-3 w-3" />
+          </Button>
+          <span className="text-sm font-medium min-w-[2rem] text-center">
+            {item.Quantity}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdateQuantity(item.id, 1)}
+            className="h-8 w-8 p-0"
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(item.id)}
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 
@@ -53,8 +183,20 @@ export function GroceryChecklist() {
   }>({});
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
-  const [isReorderMode, setIsReorderMode] = useState(false);
   const { toast } = useToast();
+
+  // Drag and drop sensors with tap-and-hold activation
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        delay: 500, // 500ms delay for tap-and-hold
+        tolerance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
 
 
@@ -108,16 +250,28 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleReorder = async (newItems: GroceryItem[]) => {
-    setItems(newItems);
-    // Update sort order in database
-    await updateSortOrder(newItems);
-    
-    // Show success message
-    toast({
-      title: "List reordered!",
-      description: "Your grocery list has been reordered successfully",
-    });
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      setItems((items) => {
+        const oldIndex = items.findIndex((item) => item.id === active.id);
+        const newIndex = items.findIndex((item) => item.id === over?.id);
+
+        const newItems = arrayMove(items, oldIndex, newIndex);
+        
+        // Update sort order in database
+        updateSortOrder(newItems);
+        
+        // Show success message
+        toast({
+          title: "List reordered!",
+          description: "Your grocery list has been reordered successfully",
+        });
+        
+        return newItems;
+      });
+    }
   };
 
   const updateSortOrder = async (newItems: GroceryItem[]) => {
@@ -147,6 +301,10 @@ export function GroceryChecklist() {
         });
       } else {
         console.log('Successfully updated sort order in database');
+        toast({
+          title: "Order saved!",
+          description: "Your grocery list order has been saved to the database",
+        });
       }
     } catch (error) {
       console.error('Error updating sort order:', error);
@@ -928,20 +1086,37 @@ export function GroceryChecklist() {
 
           {/* Grocery List Items */}
           <div className="space-y-2">
-            {isReorderMode && items.length > 0 && (
-              <div className="text-sm text-primary mb-3 flex items-center gap-2 font-medium bg-primary/5 p-2 rounded-lg border border-primary/20">
+            {items.length > 0 && (
+              <div className="text-sm text-muted-foreground mb-3 flex items-center gap-2 font-medium bg-muted/5 p-2 rounded-lg border border-muted/20">
                 <Move className="h-4 w-4" />
-                <span>Click the ↑↓ buttons to move items up or down</span>
+                <span>Tap and hold on item names to reorder</span>
               </div>
             )}
-            <SimpleGroceryReorder
-              items={items}
-              onReorder={handleReorder}
-              onToggle={toggleItem}
-              onUpdateQuantity={updateQuantity}
-              onRemove={removeItem}
-              isReorderMode={isReorderMode}
-            />
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={items.map(item => item.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                {items.map((item) => (
+                  <SortableItem
+                    key={item.id}
+                    item={item}
+                    onToggle={toggleItem}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                    getSwipeStyle={getSwipeStyle}
+                    getSwipeIndicator={getSwipeIndicator}
+                    handleTouchStart={handleTouchStart}
+                    handleTouchMove={handleTouchMove}
+                    handleTouchEnd={handleTouchEnd}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
             {/* Empty State */}
             {items.length === 0 && (
@@ -974,26 +1149,6 @@ export function GroceryChecklist() {
               className="flex-1"
             >
               Add Specials
-            </Button>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant={isReorderMode ? "default" : "outline"}
-              size="sm"
-              onClick={() => setIsReorderMode(!isReorderMode)}
-              className="flex-1"
-            >
-              {isReorderMode ? (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Done Reordering
-                </>
-              ) : (
-                <>
-                  <Move className="h-4 w-4 mr-2" />
-                  Reorder List
-                </>
-              )}
             </Button>
           </div>
         </div>
