@@ -55,11 +55,6 @@ interface SortableItemProps {
   onToggle: (id: number) => void;
   onUpdateQuantity: (id: number, change: number) => void;
   onRemove: (id: number) => void;
-  getSwipeStyle: (itemId: number) => React.CSSProperties;
-  getSwipeIndicator: (itemId: number) => React.ReactNode;
-  handleTouchStart: (e: React.TouchEvent, itemId: number) => void;
-  handleTouchMove: (e: React.TouchEvent, itemId: number) => void;
-  handleTouchEnd: (itemId: number) => void;
   isReorderMode: boolean;
 }
 
@@ -68,11 +63,6 @@ function SortableItem({
   onToggle,
   onUpdateQuantity,
   onRemove,
-  getSwipeStyle,
-  getSwipeIndicator,
-  handleTouchStart,
-  handleTouchMove,
-  handleTouchEnd,
   isReorderMode,
 }: SortableItemProps) {
   const {
@@ -93,77 +83,78 @@ function SortableItem({
   };
 
   return (
-    <Card
+    <div
       ref={setNodeRef}
-      style={{ ...getSwipeStyle(item.id), ...style }}
-      className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isReorderMode ? 'border-2 border-primary/20' : ''
+      style={style}
+      className={`p-4 border-b border-border last:border-b-0 transition-all duration-200 ${
+        isReorderMode ? 'cursor-grab active:cursor-grabbing bg-muted/30' : 'hover:bg-muted/10'
       }`}
-      onTouchStart={(e) => handleTouchStart(e, item.id)}
-      onTouchMove={(e) => handleTouchMove(e, item.id)}
-      onTouchEnd={() => handleTouchEnd(item.id)}
+      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
     >
-      {getSwipeIndicator(item.id)}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onToggle(item.id)}
-            className={`h-6 w-6 p-0 rounded-full border-2 ${
-              item.checked 
-                ? 'bg-primary border-primary text-primary-foreground' 
-                : 'border-muted-foreground/20 hover:border-primary'
-            }`}
-          >
-            {item.checked && <Check className="h-3 w-3" />}
-          </Button>
-          <div 
-            className={`flex-1 min-w-0 ${
-              isReorderMode ? 'cursor-grab active:cursor-grabbing' : ''
-            }`}
-            {...(isReorderMode ? { ...attributes, ...listeners } : {})}
-          >
+          {isReorderMode ? (
+            // Reorder mode: Show drag handle instead of checkbox
+            <div className="h-6 w-6 flex items-center justify-center text-primary">
+              <Move className="h-4 w-4" />
+            </div>
+          ) : (
+            // Normal mode: Show checkbox
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggle(item.id)}
+              className={`h-6 w-6 p-0 rounded-full border-2 ${
+                item.checked 
+                  ? 'bg-primary border-primary text-primary-foreground' 
+                  : 'border-muted-foreground/20 hover:border-primary'
+              }`}
+            >
+              {item.checked && <Check className="h-3 w-3" />}
+            </Button>
+          )}
+          <div className="flex-1 min-w-0">
             <div className={`font-medium text-sm ${
               item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-            } ${isReorderMode ? 'text-primary' : ''}`}>
+            }`}>
               {item.Item}
-              {isReorderMode && <Move className="h-3 w-3 ml-1 inline text-primary/60" />}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.Quantity <= 1}
-            className="h-8 w-8 p-0"
-          >
-            <Minus className="h-3 w-3" />
-          </Button>
-          <span className="text-sm font-medium min-w-[2rem] text-center">
-            {item.Quantity}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, 1)}
-            className="h-8 w-8 p-0"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRemove(item.id)}
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
+        {!isReorderMode && (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, -1)}
+              disabled={item.Quantity <= 1}
+              className="h-8 w-8 p-0"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-sm font-medium min-w-[2rem] text-center">
+              {item.Quantity}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, 1)}
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onRemove(item.id)}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -179,14 +170,7 @@ export function GroceryChecklist() {
     item: GroceryItem | null;
     actionType: 'purchase';
   }>({ isOpen: false, item: null, actionType: 'purchase' });
-  const [swipeState, setSwipeState] = useState<{
-    [key: number]: { 
-      startX: number; 
-      currentX: number; 
-      isDragging: boolean;
-      direction: 'left' | 'right' | null;
-    }
-  }>({});
+
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const [isReorderMode, setIsReorderMode] = useState(false);
@@ -637,98 +621,7 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleTouchStart = (e: React.TouchEvent, itemId: number) => {
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        startX: e.touches[0].clientX,
-        currentX: e.touches[0].clientX,
-        isDragging: true,
-        direction: null
-      }
-    }));
-  };
 
-  const handleTouchMove = (e: React.TouchEvent, itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return;
-
-    const currentX = e.touches[0].clientX;
-    const deltaX = currentX - state.startX;
-
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        ...state,
-        currentX,
-        direction: deltaX < 0 ? 'left' : deltaX > 0 ? 'right' : null
-      }
-    }));
-  };
-
-  const handleTouchEnd = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return;
-
-    const deltaX = state.currentX - state.startX;
-    
-    // Reset swipe state
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        startX: 0,
-        currentX: 0,
-        isDragging: false,
-        direction: null
-      }
-    }));
-
-    // Execute action based on swipe distance
-    if (Math.abs(deltaX) > 100) {
-      if (deltaX < 0) {
-        // Left swipe - delete
-        removeItem(itemId);
-      } else {
-        // Right swipe - purchase
-        toggleItem(itemId);
-      }
-    }
-  };
-
-  const getSwipeStyle = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return {};
-
-    const deltaX = state.currentX - state.startX;
-    const clampedDelta = Math.max(-150, Math.min(150, deltaX));
-    
-    return {
-      transform: `translateX(${clampedDelta}px)`,
-      transition: 'none'
-    };
-  };
-
-  const getSwipeIndicator = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return null;
-
-    const deltaX = state.currentX - state.startX;
-    if (Math.abs(deltaX) < 50) return null;
-
-    if (deltaX < 0) {
-      return (
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-destructive opacity-70">
-          <Trash2 className="h-5 w-5" />
-        </div>
-      );
-    } else {
-      return (
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-primary opacity-70">
-          <Check className="h-5 w-5" />
-        </div>
-      );
-    }
-  };
 
   const undoDelete = async (deletedItem?: DeletedItem) => {
     const itemToUndo = deletedItem || recentlyDeleted;
@@ -1121,15 +1014,15 @@ export function GroceryChecklist() {
                 )}
               </Button>
               {isReorderMode && (
-                <div className="text-sm text-muted-foreground">
-                  Tap and hold on item names to reorder
+                <div className="text-sm text-primary font-medium">
+                  Tap and hold on items to drag and reorder
                 </div>
               )}
             </div>
           )}
 
           {/* Grocery List Items */}
-          <div className="space-y-2">
+          <Card className="overflow-hidden">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1146,16 +1039,12 @@ export function GroceryChecklist() {
                     onToggle={toggleItem}
                     onUpdateQuantity={updateQuantity}
                     onRemove={removeItem}
-                    getSwipeStyle={getSwipeStyle}
-                    getSwipeIndicator={getSwipeIndicator}
-                    handleTouchStart={handleTouchStart}
-                    handleTouchMove={handleTouchMove}
-                    handleTouchEnd={handleTouchEnd}
                     isReorderMode={isReorderMode}
                   />
                 ))}
               </SortableContext>
             </DndContext>
+          </Card>
 
             {/* Empty State */}
             {items.length === 0 && (
