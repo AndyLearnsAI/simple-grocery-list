@@ -92,29 +92,28 @@ function SortableItem({
     boxShadow: isDragging ? '0 10px 25px rgba(0, 0, 0, 0.15)' : 'none',
   };
 
-  return (
+    return (
     <Card
-      ref={isReorderMode ? setNodeRef : undefined}
+      ref={setNodeRef}
       style={isReorderMode ? style : { ...getSwipeStyle(item.id), ...style }}
       className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isReorderMode ? 'select-none touch-manipulation' : ''
+        isReorderMode ? 'select-none touch-manipulation cursor-grab active:cursor-grabbing' : ''
       }`}
       onTouchStart={isReorderMode ? undefined : (e) => handleTouchStart(e, item.id)}
       onTouchMove={isReorderMode ? undefined : (e) => handleTouchMove(e, item.id)}
       onTouchEnd={isReorderMode ? undefined : () => handleTouchEnd(item.id)}
-          >
-        {!isReorderMode && getSwipeIndicator(item.id)}
-        <div className="flex items-center justify-between">
+      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
+    >
+      {!isReorderMode && getSwipeIndicator(item.id)}
+      <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
           {isReorderMode ? (
             // Reorder mode: Show drag handle instead of checkbox
             <div
-              className="h-10 w-10 flex items-center justify-center text-primary bg-primary/20 rounded-full border-2 border-primary/30 cursor-grab active:cursor-grabbing touch-manipulation"
-              {...attributes}
-              {...listeners}
+              className="h-12 w-12 flex items-center justify-center text-primary bg-primary/30 rounded-full border-2 border-primary/50 cursor-grab active:cursor-grabbing touch-manipulation shadow-sm"
               title="Drag to reorder"
             >
-              <Move className="h-5 w-5" />
+              <Move className="h-6 w-6" />
             </div>
           ) : (
             // Normal mode: Show checkbox
@@ -263,11 +262,15 @@ export function GroceryChecklist() {
 
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
+    
+    console.log('🎯 Drag end:', { active: active.id, over: over?.id, isReorderMode });
 
     if (active.id !== over?.id) {
       setItems((items) => {
         const oldIndex = items.findIndex((item) => item.id === active.id);
         const newIndex = items.findIndex((item) => item.id === over?.id);
+
+        console.log('🔄 Reordering:', { oldIndex, newIndex, itemName: items[oldIndex]?.Item });
 
         const newItems = arrayMove(items, oldIndex, newIndex);
         
@@ -1087,50 +1090,35 @@ export function GroceryChecklist() {
                 <span>Touch and drag the ⋮⋮ handle to reorder items</span>
               </div>
             )}
-            {isReorderMode ? (
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragStart={(event) => {
+                console.log('🎯 Drag start:', event);
+              }}
+              onDragEnd={handleDragEnd}
+            >
+              <SortableContext
+                items={items.map(item => item.id)}
+                strategy={verticalListSortingStrategy}
               >
-                <SortableContext
-                  items={items.map(item => item.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {items.map((item) => (
-                    <SortableItem
-                      key={item.id}
-                      item={item}
-                      onToggle={toggleItem}
-                      onUpdateQuantity={updateQuantity}
-                      onRemove={removeItem}
-                      getSwipeStyle={getSwipeStyle}
-                      getSwipeIndicator={getSwipeIndicator}
-                      handleTouchStart={handleTouchStart}
-                      handleTouchMove={handleTouchMove}
-                      handleTouchEnd={handleTouchEnd}
-                      isReorderMode={isReorderMode}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
-            ) : (
-              items.map((item) => (
-                <SortableItem
-                  key={item.id}
-                  item={item}
-                  onToggle={toggleItem}
-                  onUpdateQuantity={updateQuantity}
-                  onRemove={removeItem}
-                  getSwipeStyle={getSwipeStyle}
-                  getSwipeIndicator={getSwipeIndicator}
-                  handleTouchStart={handleTouchStart}
-                  handleTouchMove={handleTouchMove}
-                  handleTouchEnd={handleTouchEnd}
-                  isReorderMode={isReorderMode}
-                />
-              ))
-            )}
+                {items.map((item) => (
+                  <SortableItem
+                    key={item.id}
+                    item={item}
+                    onToggle={toggleItem}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                    getSwipeStyle={getSwipeStyle}
+                    getSwipeIndicator={getSwipeIndicator}
+                    handleTouchStart={handleTouchStart}
+                    handleTouchMove={handleTouchMove}
+                    handleTouchEnd={handleTouchEnd}
+                    isReorderMode={isReorderMode}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
 
             {/* Empty State */}
             {items.length === 0 && (

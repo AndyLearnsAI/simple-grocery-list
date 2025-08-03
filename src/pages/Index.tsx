@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { GroceryChecklist } from "@/components/GroceryChecklist";
 import { PurchaseHistory } from "@/components/PurchaseHistory";
+import { DragTest } from "@/components/DragTest";
 import { ShoppingCart, LogOut, History, AlertTriangle } from "lucide-react";
 
 const Index = () => {
@@ -99,7 +100,7 @@ const Index = () => {
       <main className="container mx-auto px-4 py-6 max-w-2xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab Navigation */}
-          <TabsList className="grid w-full grid-cols-2 bg-card shadow-card border">
+          <TabsList className="grid w-full grid-cols-3 bg-card shadow-card border">
             <TabsTrigger 
               value="grocery-list" 
               className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
@@ -116,6 +117,12 @@ const Index = () => {
               <span className="hidden sm:inline">Purchase History</span>
               <span className="sm:hidden">History</span>
             </TabsTrigger>
+            <TabsTrigger 
+              value="drag-test"
+              className="flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+            >
+              <span>Test</span>
+            </TabsTrigger>
           </TabsList>
 
           {/* Tab Content */}
@@ -128,6 +135,12 @@ const Index = () => {
           <TabsContent value="purchase-history" className="space-y-0">
             <div className="animate-fade-in">
               <PurchaseHistory />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="drag-test" className="space-y-0">
+            <div className="animate-fade-in">
+              <DragTest />
             </div>
           </TabsContent>
         </Tabs>
