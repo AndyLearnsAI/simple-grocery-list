@@ -1022,7 +1022,7 @@ export function GroceryChecklist() {
           )}
 
           {/* Grocery List Items */}
-          <Card className="overflow-hidden">
+          <div className="overflow-hidden border rounded-lg">
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1044,7 +1044,6 @@ export function GroceryChecklist() {
                 ))}
               </SortableContext>
             </DndContext>
-          </Card>
 
             {/* Empty State */}
             {items.length === 0 && (
