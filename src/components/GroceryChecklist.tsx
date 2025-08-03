@@ -60,6 +60,7 @@ interface SortableItemProps {
   handleTouchStart: (e: React.TouchEvent, itemId: number) => void;
   handleTouchMove: (e: React.TouchEvent, itemId: number) => void;
   handleTouchEnd: (itemId: number) => void;
+  isReorderMode: boolean;
 }
 
 function SortableItem({
@@ -72,6 +73,7 @@ function SortableItem({
   handleTouchStart,
   handleTouchMove,
   handleTouchEnd,
+  isReorderMode,
 }: SortableItemProps) {
   const {
     attributes,
@@ -80,7 +82,7 @@ function SortableItem({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: item.id });
+  } = useSortable({ id: item.id, disabled: !isReorderMode });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -94,7 +96,9 @@ function SortableItem({
     <Card
       ref={setNodeRef}
       style={{ ...getSwipeStyle(item.id), ...style }}
-      className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
+      className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
+        isReorderMode ? 'border-2 border-primary/20' : ''
+      }`}
       onTouchStart={(e) => handleTouchStart(e, item.id)}
       onTouchMove={(e) => handleTouchMove(e, item.id)}
       onTouchEnd={() => handleTouchEnd(item.id)}
@@ -115,14 +119,16 @@ function SortableItem({
             {item.checked && <Check className="h-3 w-3" />}
           </Button>
           <div 
-            className="flex-1 min-w-0 cursor-grab active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
+            className={`flex-1 min-w-0 ${
+              isReorderMode ? 'cursor-grab active:cursor-grabbing' : ''
+            }`}
+            {...(isReorderMode ? { ...attributes, ...listeners } : {})}
           >
             <div className={`font-medium text-sm ${
               item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-            }`}>
+            } ${isReorderMode ? 'text-primary' : ''}`}>
               {item.Item}
+              {isReorderMode && <Move className="h-3 w-3 ml-1 inline text-primary/60" />}
             </div>
           </div>
         </div>
@@ -183,6 +189,7 @@ export function GroceryChecklist() {
   }>({});
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
+  const [isReorderMode, setIsReorderMode] = useState(false);
   const { toast } = useToast();
 
   // Drag and drop sensors with tap-and-hold activation
@@ -1084,14 +1091,45 @@ export function GroceryChecklist() {
             </Button>
           </div>
 
+          {/* Reorder Toggle */}
+          {items.length > 0 && (
+            <div className="flex justify-between items-center mb-4">
+              <Button
+                variant={isReorderMode ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setIsReorderMode(!isReorderMode);
+                  if (!isReorderMode) {
+                    toast({
+                      title: "Reorder mode enabled",
+                      description: "Tap and hold on item names to reorder",
+                    });
+                  }
+                }}
+                className="flex items-center gap-2"
+              >
+                {isReorderMode ? (
+                  <>
+                    <Check className="h-4 w-4" />
+                    Done Reordering
+                  </>
+                ) : (
+                  <>
+                    <Move className="h-4 w-4" />
+                    Reorder List
+                  </>
+                )}
+              </Button>
+              {isReorderMode && (
+                <div className="text-sm text-muted-foreground">
+                  Tap and hold on item names to reorder
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Grocery List Items */}
           <div className="space-y-2">
-            {items.length > 0 && (
-              <div className="text-sm text-muted-foreground mb-3 flex items-center gap-2 font-medium bg-muted/5 p-2 rounded-lg border border-muted/20">
-                <Move className="h-4 w-4" />
-                <span>Tap and hold on item names to reorder</span>
-              </div>
-            )}
             <DndContext
               sensors={sensors}
               collisionDetection={closestCenter}
@@ -1113,6 +1151,7 @@ export function GroceryChecklist() {
                     handleTouchStart={handleTouchStart}
                     handleTouchMove={handleTouchMove}
                     handleTouchEnd={handleTouchEnd}
+                    isReorderMode={isReorderMode}
                   />
                 ))}
               </SortableContext>
