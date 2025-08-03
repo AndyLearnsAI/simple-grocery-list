@@ -9,25 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import {
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+
 
 interface GroceryItem {
   id: number;
@@ -49,54 +31,57 @@ interface DeletedItem extends GroceryItem {
   addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
 }
 
-// Sortable Item Component
-interface SortableItemProps {
+// Reorderable Item Component
+interface ReorderableItemProps {
   item: GroceryItem;
   onToggle: (id: number) => void;
   onUpdateQuantity: (id: number, change: number) => void;
   onRemove: (id: number) => void;
+  onMoveUp: (id: number) => void;
+  onMoveDown: (id: number) => void;
+  isFirst: boolean;
+  isLast: boolean;
   isReorderMode: boolean;
 }
 
-function SortableItem({
+function ReorderableItem({
   item,
   onToggle,
   onUpdateQuantity,
   onRemove,
+  onMoveUp,
+  onMoveDown,
+  isFirst,
+  isLast,
   isReorderMode,
-}: SortableItemProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id, disabled: !isReorderMode });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 1000 : 'auto',
-    boxShadow: isDragging ? '0 10px 25px rgba(0, 0, 0, 0.15)' : 'none',
-  };
-
+}: ReorderableItemProps) {
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`p-4 border-b border-border last:border-b-0 transition-all duration-200 ${
-        isReorderMode ? 'cursor-grab active:cursor-grabbing bg-muted/30' : 'hover:bg-muted/10'
-      }`}
-      {...(isReorderMode ? { ...attributes, ...listeners } : {})}
-    >
+    <div className={`p-4 border-b border-border last:border-b-0 transition-all duration-200 ${
+      isReorderMode ? 'bg-muted/30' : 'hover:bg-muted/10'
+    }`}>
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
           {isReorderMode ? (
-            // Reorder mode: Show drag handle instead of checkbox
-            <div className="h-6 w-6 flex items-center justify-center text-primary">
-              <Move className="h-4 w-4" />
+            // Reorder mode: Show reorder buttons
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMoveUp(item.id)}
+                disabled={isFirst}
+                className="h-6 w-6 p-0 text-primary hover:text-primary/80"
+              >
+                ↑
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onMoveDown(item.id)}
+                disabled={isLast}
+                className="h-6 w-6 p-0 text-primary hover:text-primary/80"
+              >
+                ↓
+              </Button>
             </div>
           ) : (
             // Normal mode: Show checkbox
@@ -176,18 +161,7 @@ export function GroceryChecklist() {
   const [isReorderMode, setIsReorderMode] = useState(false);
   const { toast } = useToast();
 
-  // Drag and drop sensors with tap-and-hold activation
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        delay: 500, // 500ms delay for tap-and-hold
-        tolerance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+
 
 
 
@@ -241,28 +215,40 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
+  const moveItemUp = async (id: number) => {
+    const currentIndex = items.findIndex(item => item.id === id);
+    if (currentIndex <= 0) return;
 
-    if (active.id !== over?.id) {
-      setItems((items) => {
-        const oldIndex = items.findIndex((item) => item.id === active.id);
-        const newIndex = items.findIndex((item) => item.id === over?.id);
+    const newItems = [...items];
+    const temp = newItems[currentIndex];
+    newItems[currentIndex] = newItems[currentIndex - 1];
+    newItems[currentIndex - 1] = temp;
 
-        const newItems = arrayMove(items, oldIndex, newIndex);
-        
-        // Update sort order in database
-        updateSortOrder(newItems);
-        
-        // Show success message
-        toast({
-          title: "List reordered!",
-          description: "Your grocery list has been reordered successfully",
-        });
-        
-        return newItems;
-      });
-    }
+    setItems(newItems);
+    await updateSortOrder(newItems);
+    
+    toast({
+      title: "Item moved up",
+      description: "Item position updated successfully",
+    });
+  };
+
+  const moveItemDown = async (id: number) => {
+    const currentIndex = items.findIndex(item => item.id === id);
+    if (currentIndex >= items.length - 1) return;
+
+    const newItems = [...items];
+    const temp = newItems[currentIndex];
+    newItems[currentIndex] = newItems[currentIndex + 1];
+    newItems[currentIndex + 1] = temp;
+
+    setItems(newItems);
+    await updateSortOrder(newItems);
+    
+    toast({
+      title: "Item moved down",
+      description: "Item position updated successfully",
+    });
   };
 
   const updateSortOrder = async (newItems: GroceryItem[]) => {
@@ -995,7 +981,7 @@ export function GroceryChecklist() {
                   if (!isReorderMode) {
                     toast({
                       title: "Reorder mode enabled",
-                      description: "Tap and hold on item names to reorder",
+                      description: "Use the ↑ ↓ buttons to reorder items",
                     });
                   }
                 }}
@@ -1015,7 +1001,7 @@ export function GroceryChecklist() {
               </Button>
               {isReorderMode && (
                 <div className="text-sm text-primary font-medium">
-                  Tap and hold on items to drag and reorder
+                  Use ↑ ↓ buttons to reorder items
                 </div>
               )}
             </div>
@@ -1023,30 +1009,23 @@ export function GroceryChecklist() {
 
           {/* Grocery List Items */}
           <div className="overflow-hidden border rounded-lg">
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
-              <SortableContext
-                items={items.map(item => item.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {items.map((item) => (
-                  <SortableItem
-                    key={item.id}
-                    item={item}
-                    onToggle={toggleItem}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeItem}
-                    isReorderMode={isReorderMode}
-                  />
-                ))}
-              </SortableContext>
-            </DndContext>
-
-            {/* Empty State */}
-            {items.length === 0 && (
+            {items.length > 0 ? (
+              items.map((item, index) => (
+                <ReorderableItem
+                  key={item.id}
+                  item={item}
+                  onToggle={toggleItem}
+                  onUpdateQuantity={updateQuantity}
+                  onRemove={removeItem}
+                  onMoveUp={moveItemUp}
+                  onMoveDown={moveItemDown}
+                  isFirst={index === 0}
+                  isLast={index === items.length - 1}
+                  isReorderMode={isReorderMode}
+                />
+              ))
+            ) : (
+              /* Empty State */
               <div className="p-6 text-center">
                 <div className="text-muted-foreground">
                   Your grocery list is empty. Add some items to get started!
