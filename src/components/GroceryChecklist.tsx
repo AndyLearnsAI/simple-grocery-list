@@ -19,6 +19,7 @@ interface GroceryItem {
   Price?: number;
   Discount?: number;
   user_id?: string;
+  img?: string;
 }
 
 interface DeletedItem extends GroceryItem {
@@ -864,6 +865,18 @@ export function GroceryChecklist() {
                     >
                       {item.checked && <Check className="h-3 w-3" />}
                     </Button>
+                    {item.img && (
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                        <img
+                          src={item.img}
+                          alt={item.Item}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className={`font-medium text-sm ${
                         item.checked ? 'line-through text-muted-foreground' : 'text-foreground'

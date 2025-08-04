@@ -224,7 +224,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         wasNew = true;
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: 1, user_id: user.id })
+          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img })
           .select('id')
           .single();
         if (error) throw error;
@@ -283,7 +283,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         // Add to saved list
         const { error } = await supabase
           .from('SavedlistItems')
-          .insert({ Item: item.item, user_id: user.id });
+          .insert({ Item: item.item, user_id: user.id, img: item.img });
 
         if (error) throw error;
 
@@ -382,7 +382,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         wasNew = true;
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: quantity, user_id: user.id })
+          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img })
           .select('id')
           .single();
         if (error) throw error;
