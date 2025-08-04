@@ -19,6 +19,7 @@ interface GroceryItem {
   Price?: number;
   Discount?: number;
   user_id?: string;
+  img?: string;
 }
 
 interface DeletedItem extends GroceryItem {
@@ -125,7 +126,8 @@ export function GroceryChecklist() {
             Item: item.Item,
             Quantity: selectedQuantity,
             user_id: user.data.user.id,
-            last_bought: new Date().toISOString()
+            last_bought: new Date().toISOString(),
+            img: item.img
           }
         ])
         .select()
@@ -492,7 +494,8 @@ export function GroceryChecklist() {
         console.log('➕ Adding purchased item back as new item:', {
           Item: itemToUndo.Item,
           Quantity: itemToUndo.Quantity || 1,
-          user_id: user.data.user.id
+          user_id: user.data.user.id,
+          img: itemToUndo.img
         });
         
         const { data, error } = await supabase
@@ -501,7 +504,8 @@ export function GroceryChecklist() {
             {
               Item: itemToUndo.Item,
               Quantity: itemToUndo.Quantity || 1,
-              user_id: user.data.user.id
+              user_id: user.data.user.id,
+              img: itemToUndo.img
             }
           ])
           .select()
@@ -545,7 +549,8 @@ export function GroceryChecklist() {
         console.log('➕ Adding deleted item back as new item:', {
           Item: itemToUndo.Item,
           Quantity: itemToUndo.Quantity || 1,
-          user_id: user.data.user.id
+          user_id: user.data.user.id,
+          img: itemToUndo.img
         });
         
         const { data, error } = await supabase
@@ -554,7 +559,8 @@ export function GroceryChecklist() {
             {
               Item: itemToUndo.Item,
               Quantity: itemToUndo.Quantity || 1,
-              user_id: user.data.user.id
+              user_id: user.data.user.id,
+              img: itemToUndo.img
             }
           ])
           .select()
@@ -864,6 +870,18 @@ export function GroceryChecklist() {
                     >
                       {item.checked && <Check className="h-3 w-3" />}
                     </Button>
+                    {item.img && (
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                        <img
+                          src={item.img}
+                          alt={item.Item}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className={`font-medium text-sm ${
                         item.checked ? 'line-through text-muted-foreground' : 'text-foreground'

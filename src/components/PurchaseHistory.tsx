@@ -12,6 +12,7 @@ interface PurchaseItem {
   Quantity: number;
   last_bought: string;
   created_at: string;
+  img?: string;
 }
 
 interface GroupedDate {
@@ -198,7 +199,8 @@ export function PurchaseHistory() {
             {
               Item: item.Item,
               Quantity: selectedQuantity,
-              user_id: user.data.user.id
+              user_id: user.data.user.id,
+              img: item.img
             }
           ]);
 
@@ -337,7 +339,8 @@ export function PurchaseHistory() {
               Item: itemToUndo.originalItem.Item,
               Quantity: itemToUndo.restoredQuantity,
               user_id: user.data.user.id,
-              last_bought: itemToUndo.originalItem.last_bought
+              last_bought: itemToUndo.originalItem.last_bought,
+              img: itemToUndo.originalItem.img
             }
           ]);
 
@@ -445,9 +448,22 @@ export function PurchaseHistory() {
                 <Card key={item.id} className="group p-3 shadow-card hover:shadow-lg transition-shadow">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
-                      <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
-                        <Package className="h-3 w-3 text-accent-foreground" />
-                      </div>
+                      {item.img ? (
+                        <div className="w-6 h-6 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          <img
+                            src={item.img}
+                            alt={item.Item}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
+                          <Package className="h-3 w-3 text-accent-foreground" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-foreground">
                           {item.Item}
@@ -519,9 +535,22 @@ export function PurchaseHistory() {
                 <Card key={item.id} className="group p-3 shadow-card hover:shadow-lg transition-shadow">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
-                      <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
-                        <Package className="h-3 w-3 text-accent-foreground" />
-                      </div>
+                      {item.img ? (
+                        <div className="w-6 h-6 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          <img
+                            src={item.img}
+                            alt={item.Item}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-6 h-6 bg-accent rounded-full flex items-center justify-center">
+                          <Package className="h-3 w-3 text-accent-foreground" />
+                        </div>
+                      )}
                       <div className="flex-1 min-w-0">
                         <div className="font-medium text-sm text-foreground">
                           {item.Item}

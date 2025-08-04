@@ -1,11 +1,27 @@
-import { useState, useEffect } from "react";
-import { Package, Plus, Minus, X, ChevronDown, ChevronRight } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { useState, useEffect, useMemo } from "react";
+import { X, Plus, Minus, Check, Heart } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "@/components/ui/dialog";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { QuantitySelector } from "./QuantitySelector";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SpecialsItem {
   id: number;
@@ -21,34 +37,32 @@ interface SpecialsItem {
   user_id?: string;
 }
 
-interface SelectedSpecialsItem extends SpecialsItem {
-  selectedQuantity: number;
-}
-
-interface CategoryGroup {
-  name: string;
-  items: SelectedSpecialsItem[];
-  isExpanded: boolean;
-  loaded: boolean;
-}
-
-interface SpecialGroup {
-  name: 'On Special' | 'Other';
-  categories: CategoryGroup[];
-  isExpanded: boolean;
-}
-
 interface SpecialsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onItemsAdded: (data: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => void;
+  onItemsAdded: (data: {
+    items: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
+    addedItemIds: number[];
+  }) => void;
+  onModalClose?: () => void;
 }
 
-export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalProps) {
-  const [categoryGroups, setCategoryGroups] = useState<SpecialGroup[]>([]);
+export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: SpecialsModalProps) {
+  const [specials, setSpecials] = useState<SpecialsItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [carouselApi, setCarouselApi] = useState<CarouselApi>();
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(0);
+
+  const [detailViewItem, setDetailViewItem] = useState<SpecialsItem | null>(null);
+  const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
+  const [detailQuantity, setDetailQuantity] = useState(1);
+  const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
+  const [savedItems, setSavedItems] = useState<Set<number>>(new Set());
+
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const ITEMS_PER_PAGE = 9;
 
   useEffect(() => {
     if (isOpen) {
@@ -56,111 +70,104 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     }
   }, [isOpen]);
 
-  const fetchSpecialsItems = async () => {
+  useEffect(() => {
+    if (isOpen && specials.length > 0) {
+      checkExistingItems();
+      checkSavedItems();
+    }
+  }, [isOpen, specials]);
+
+  useEffect(() => {
+    if (!carouselApi) return;
+
+    setTotalPages(carouselApi.scrollSnapList().length);
+    setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+
+    const onSelect = () => {
+      setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+    };
+
+    carouselApi.on("select", onSelect);
+    return () => {
+      carouselApi.off("select", onSelect);
+    };
+  }, [carouselApi]);
+
+  const checkExistingItems = async () => {
     try {
-      console.log('Fetching specials items...');
-      
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: existingItems, error } = await supabase
+        .from('Grocery list')
+        .select('Item')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItemNames = new Set(existingItems?.map(item => normalize(item.Item)) || []);
+
+      // Check which specials items already exist in the grocery list
+      const alreadyAddedItems = new Set<number>();
+      specials.forEach(special => {
+        if (existingItemNames.has(normalize(special.item))) {
+          alreadyAddedItems.add(special.id);
+        }
+      });
+
+      setAddedItems(alreadyAddedItems);
+    } catch (error) {
+      console.error('Error checking existing items:', error);
+    }
+  };
+
+  const checkSavedItems = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: savedItemsData, error } = await supabase
+        .from('SavedlistItems')
+        .select('Item')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const savedItemNames = new Set(savedItemsData?.map(item => normalize(item.Item)) || []);
+
+      // Check which specials items are already saved
+      const alreadySavedItems = new Set<number>();
+      specials.forEach(special => {
+        if (savedItemNames.has(normalize(special.item))) {
+          alreadySavedItems.add(special.id);
+        }
+      });
+
+      setSavedItems(alreadySavedItems);
+    } catch (error) {
+      console.error('Error checking saved items:', error);
+    }
+  };
+
+  const fetchSpecialsItems = async () => {
+    setLoading(true);
+    try {
       const { data, error } = await supabase
         .from('specials')
         .select('*')
+        .order('on_special', { ascending: false })
         .order('item', { ascending: true });
 
-      console.log('Supabase response:', { data, error });
+      if (error) throw error;
 
-      if (error) {
-        console.error('Supabase error:', error);
-        throw new Error(`Failed to fetch specials: ${error.message}`);
-      }
-
-      if (!data || data.length === 0) {
-        throw new Error('No specials data found. Please check if the table has data.');
-      }
-
-      console.log('Fetched data:', data);
-
-      // Find the earliest catalogue_date for "Last updated" display
-      const dates = data?.map(item => item.catalogue_date).filter(Boolean) as string[];
-      if (dates.length > 0) {
-        const earliestDate = dates.reduce((earliest, current) => 
-          new Date(current) < new Date(earliest) ? current : earliest
-        );
-        setLastUpdated(earliestDate);
-      }
-
-      // Group items by on_special status first, then by category
-      const groupedItems = data?.reduce((groups: { onSpecial: { [key: string]: SelectedSpecialsItem[] }, other: { [key: string]: SelectedSpecialsItem[] } }, item) => {
-        const category = item.category || 'Other';
-        const selectedItem = {
-          ...item,
-          selectedQuantity: 0
-        };
-        
-        // Check if on_special property exists
-        if (typeof item.on_special === 'boolean') {
-          if (item.on_special) {
-            if (!groups.onSpecial[category]) {
-              groups.onSpecial[category] = [];
-            }
-            groups.onSpecial[category].push(selectedItem);
-          } else {
-            if (!groups.other[category]) {
-              groups.other[category] = [];
-            }
-            groups.other[category].push(selectedItem);
-          }
-        } else {
-          console.warn('Item missing on_special property:', item);
-          // Default to 'other' if on_special is not defined
-          if (!groups.other[category]) {
-            groups.other[category] = [];
-          }
-          groups.other[category].push(selectedItem);
-        }
-        return groups;
-      }, { onSpecial: {}, other: {} }) || { onSpecial: {}, other: {} };
-
-      console.log('Grouped items:', groupedItems);
-
-      // Convert to SpecialGroup format with categories
-      const specialGroupsData: SpecialGroup[] = [
-        {
-          name: 'On Special',
-          categories: Object.entries(groupedItems.onSpecial).map(([categoryName, items]) => ({
-            name: categoryName,
-            items: items,
-            isExpanded: false,
-            loaded: false
-          })).filter(cat => cat.items.length > 0), // Only include categories with items
-          isExpanded: false
-        },
-        {
-          name: 'Other',
-          categories: Object.entries(groupedItems.other).map(([categoryName, items]) => ({
-            name: categoryName,
-            items: items,
-            isExpanded: false,
-            loaded: false
-          })).filter(cat => cat.items.length > 0), // Only include categories with items
-          isExpanded: false
-        }
-      ].filter(group => group.categories.length > 0); // Only include groups with categories
-
-
-      console.log('Special groups data:', specialGroupsData);
-      setCategoryGroups(specialGroupsData);
+      console.log('Specials data:', data);
+      setSpecials(data || []);
     } catch (error) {
-      console.error('Error fetching specials items:', error);
-      let errorMessage = 'Unknown error occurred';
-      
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-      
       toast({
-        title: "Error loading specials modal",
-        description: `Please try again. ${errorMessage}`,
+        title: "Error loading specials",
+        description: "Failed to fetch specials from the database.",
         variant: "destructive",
       });
     } finally {
@@ -168,433 +175,514 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     }
   };
 
-  const updateQuantity = (itemId: number, change: number) => {
-    setCategoryGroups(prev => prev.map(group => ({
-      ...group,
-      categories: group.categories.map(category => ({
-        ...category,
-        items: category.items.map(item => {
-          if (item.id === itemId) {
-            const newQuantity = Math.max(0, item.selectedQuantity + change);
-            return { ...item, selectedQuantity: newQuantity };
-          }
-          return item;
-        })
-      }))
-    })));
-  };
-
-  const toggleSpecialGroup = (specialGroupName: 'On Special' | 'Other') => {
-    setCategoryGroups(prev => prev.map(group => 
-      group.name === specialGroupName 
-        ? { ...group, isExpanded: !group.isExpanded }
-        : group
-    ));
-  };
-
-  const toggleCategory = (specialGroupName: 'On Special' | 'Other', categoryName: string) => {
-    setCategoryGroups(prev => prev.map(group => {
-        if (group.name === specialGroupName) {
-            return {
-                ...group,
-                categories: group.categories.map(category => {
-                    if (category.name === categoryName) {
-                        return { 
-                            ...category, 
-                            isExpanded: !category.isExpanded,
-                            loaded: category.loaded || !category.isExpanded // Set loaded to true when expanding
-                        };
-                    }
-                    return category;
-                })
-            };
-        }
-        return group;
-    }));
-  };
-
-  const formatPrice = (price: string | null, discount: string | null) => {
-    if (!price) return '';
-    
-    if (!discount) return price;
-    
-    return `${price} (${discount})`;
-  };
-
-  const addSelectedItems = async () => {
-    const selectedItems = categoryGroups.flatMap(group =>
-      group.categories.flatMap(category =>
-        category.items.filter(item => item.selectedQuantity > 0)
-      )
-    );
-
-    console.log('Selected items to add:', selectedItems);
-
-    if (selectedItems.length === 0) {
-      toast({
-        title: "No items selected",
-        description: "Please select at least one item to add",
-        variant: "destructive",
-      });
-      return;
+  const pages = useMemo(() => {
+    const p = [];
+    for (let i = 0; i < specials.length; i += ITEMS_PER_PAGE) {
+      p.push(specials.slice(i, i + ITEMS_PER_PAGE));
     }
+    return p;
+  }, [specials, ITEMS_PER_PAGE]);
 
+  useEffect(() => {
+    setTotalPages(pages.length);
+  }, [pages]);
+
+  const handleItemClick = (item: SpecialsItem) => {
+    setDetailViewItem(item);
+    setIsDetailViewOpen(true);
+  };
+
+  const handleAddItemFromCard = async (item: SpecialsItem) => {
     try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        console.error('No user found');
-        return;
-      }
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
 
-      console.log('Current user:', user.data.user.id);
-
-      // Helper function for case-insensitive comparison
-      const normalizeItemName = (name: string) => name.toLowerCase().trim();
-
-      // Get all existing grocery list items
       const { data: existingItems, error: fetchError } = await supabase
         .from('Grocery list')
-        .select('*')
-        .eq('user_id', user.data.user.id);
-
-      console.log('Existing grocery list items:', existingItems);
-      console.log('Fetch error:', fetchError);
+        .select('id, Item, Quantity')
+        .eq('user_id', user.id);
 
       if (fetchError) throw fetchError;
 
-      const itemsToAdd: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[] = [];
-      const addedItemIds: number[] = [];
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItem = existingItems?.find(i => normalize(i.Item) === normalize(item.item));
 
-      for (const selectedItem of selectedItems) {
-        console.log('Processing selected item:', selectedItem);
-        
-        // Check if item already exists in grocery list (case-insensitive)
-        const existingItem = existingItems?.find(item => 
-          normalizeItemName(item.Item) === normalizeItemName(selectedItem.item)
-        );
+      let addedItemId: number;
+      let wasNew = false;
+      let originalQuantity = 0;
 
-        console.log('Found existing item:', existingItem);
-
-        if (existingItem) {
-          // Update existing item quantity
-          const originalQuantity = existingItem.Quantity || 0;
-          const newQuantity = originalQuantity + selectedItem.selectedQuantity;
-          
-          console.log('Updating existing item:', {
-            id: existingItem.id,
-            originalQuantity,
-            selectedQuantity: selectedItem.selectedQuantity,
-            newQuantity
-          });
-          
-          const { error: updateError } = await supabase
-            .from('Grocery list')
-            .update({ Quantity: newQuantity })
-            .eq('id', existingItem.id);
-
-          console.log('Update error:', updateError);
-          if (updateError) throw updateError;
-          
-          addedItemIds.push(existingItem.id);
-          
-          itemsToAdd.push({
-            item: selectedItem.item,
-            quantity: selectedItem.selectedQuantity,
-            originalQuantity: originalQuantity,
-            wasNew: false
-          });
-        } else {
-          // Add new item to grocery list
-          console.log('Adding new item:', {
-            Item: selectedItem.item,
-            Quantity: selectedItem.selectedQuantity,
-            user_id: user.data.user.id
-          });
-          
-          const { data: newItem, error: insertError } = await supabase
-            .from('Grocery list')
-            .insert([
-              {
-                Item: selectedItem.item,
-                Quantity: selectedItem.selectedQuantity,
-                user_id: user.data.user.id
-              }
-            ])
-            .select()
-            .single();
-
-          console.log('Insert result:', { newItem, insertError });
-          if (insertError) {
-            console.error('Error inserting item:', insertError);
-            if (insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
-              throw new Error(`Item "${selectedItem.item}" already exists in your list. Try updating the quantity instead.`);
-            }
-            throw insertError;
-          }
-          if (newItem) {
-            addedItemIds.push(newItem.id);
-          }
-          
-          itemsToAdd.push({
-            item: selectedItem.item,
-            quantity: selectedItem.selectedQuantity,
-            originalQuantity: 0,
-            wasNew: true
-          });
-        }
+      if (existingItem) {
+        originalQuantity = existingItem.Quantity || 0;
+        const newQuantity = originalQuantity + 1;
+        const { error } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: newQuantity })
+          .eq('id', existingItem.id);
+        if (error) throw error;
+        addedItemId = existingItem.id;
+      } else {
+        wasNew = true;
+        const { data: newItem, error } = await supabase
+          .from('Grocery list')
+          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img })
+          .select('id')
+          .single();
+        if (error) throw error;
+        addedItemId = newItem.id;
       }
 
-      console.log('Final results:', { itemsToAdd, addedItemIds });
-
-      // Reset selections
-      setCategoryGroups(prev => prev.map(group => ({
-        ...group,
-        categories: group.categories.map(category => ({
-            ...category,
-            items: category.items.map(item => ({ ...item, selectedQuantity: 0 }))
-        }))
-      })));
-
-      // Notify parent component
       onItemsAdded({
-        items: itemsToAdd,
-        addedItemIds
+        items: [{ item: item.item, quantity: 1, wasNew, originalQuantity }],
+        addedItemIds: [addedItemId],
       });
 
-      onClose();
-    } catch (error) {
-      console.error('Error adding items:', error);
-      let errorMessage = "Failed to add items to grocery list";
-      
-      if (error instanceof Error) {
-        // Check for specific database errors
-        if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
-          errorMessage = "Some items already exist in your list. Try updating quantities instead.";
-        } else if (error.message.includes('user not authenticated')) {
-          errorMessage = "Please sign in to add items to your grocery list.";
-        } else {
-          errorMessage = error.message;
-        }
-      }
-      
+      // Add to addedItems set
+      setAddedItems(prev => new Set(prev).add(item.id));
+
       toast({
-        title: "Error adding items",
-        description: errorMessage,
+        title: "Item Added",
+        description: `${item.item} added to your list.`,
+      });
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Adding Item",
+        description: message,
         variant: "destructive",
       });
     }
   };
 
-  const selectedCount = categoryGroups.flatMap(group =>
-    group.categories.flatMap(category =>
-      category.items.filter(item => item.selectedQuantity > 0)
-    )
-  ).length;
+  const handleToggleSavedItem = async (item: SpecialsItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
 
-  if (loading) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md">
+      if (savedItems.has(item.id)) {
+        // Remove from saved list
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('Item', item.item);
+
+        if (error) throw error;
+
+        setSavedItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(item.id);
+          return newSet;
+        });
+
+        toast({
+          title: "Item Removed",
+          description: `${item.item} removed from saved list.`,
+        });
+      } else {
+        // Add to saved list
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .insert({ Item: item.item, user_id: user.id, img: item.img });
+
+        if (error) throw error;
+
+        setSavedItems(prev => new Set(prev).add(item.id));
+
+        toast({
+          title: "Item Saved",
+          description: `${item.item} added to saved list.`,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveItemFromCard = async (item: SpecialsItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const { data: existingItems, error: fetchError } = await supabase
+        .from('Grocery list')
+        .select('id, Item, Quantity')
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItem = existingItems?.find(i => normalize(i.Item) === normalize(item.item));
+
+      if (existingItem) {
+        // Remove item completely regardless of quantity
+        const { error } = await supabase
+          .from('Grocery list')
+          .delete()
+          .eq('id', existingItem.id);
+        if (error) throw error;
+      }
+
+      // Remove from addedItems set
+      setAddedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id);
+        return newSet;
+      });
+
+      toast({
+        title: "Item Removed",
+        description: `All quantities of ${item.item} removed from your list.`,
+      });
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Removing Item",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleAddItem = async (item: SpecialsItem, quantity: number) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const { data: existingItems, error: fetchError } = await supabase
+        .from('Grocery list')
+        .select('id, Item, Quantity')
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItem = existingItems?.find(i => normalize(i.Item) === normalize(item.item));
+
+      let addedItemId: number;
+      let wasNew = false;
+      let originalQuantity = 0;
+
+      if (existingItem) {
+        originalQuantity = existingItem.Quantity || 0;
+        const newQuantity = originalQuantity + quantity;
+        const { error } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: newQuantity })
+          .eq('id', existingItem.id);
+        if (error) throw error;
+        addedItemId = existingItem.id;
+      } else {
+        wasNew = true;
+        const { data: newItem, error } = await supabase
+          .from('Grocery list')
+          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img })
+          .select('id')
+          .single();
+        if (error) throw error;
+        addedItemId = newItem.id;
+      }
+
+      onItemsAdded({
+        items: [{ item: item.item, quantity, wasNew, originalQuantity }],
+        addedItemIds: [addedItemId],
+      });
+
+      toast({
+        title: "Item Added",
+        description: `${quantity} x ${item.item} added to your list.`,
+      });
+
+      setIsDetailViewOpen(false);
+      setDetailViewItem(null);
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Adding Item",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+
+
+  return (
+    <>
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+          onModalClose?.();
+        }
+      }}>
+        <DialogContent className="w-full max-w-2xl h-[90vh] flex flex-col p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle>Add Specials</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
-          <div className="text-center py-8">
-            <div className="text-muted-foreground">Loading specials items...</div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-muted-foreground">Loading specials...</p>
+            </div>
+          ) : specials.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-muted-foreground">No specials available right now.</p>
+            </div>
+          ) : (
+            <Carousel setApi={setCarouselApi} className="flex-1 flex flex-col justify-between">
+              <div className="relative flex-1">
+                <CarouselContent className="h-full">
+                  {pages.map((page, pageIndex) => (
+                    <CarouselItem key={pageIndex} className="h-full">
+                      <div className="grid grid-cols-3 gap-1 p-2 h-full">
+                        {page.map((item) => (
+                          <Card
+                            key={item.id}
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[2/3] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            onClick={() => handleItemClick(item)}
+                          >
+                            <CardContent className="p-1 flex flex-col w-full h-full">
+                              {/* Product Image positioned top right, covering 75% of card */}
+                              <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+                                <div className="absolute top-0 right-0 w-3/4 h-3/4">
+                                  <img
+                                    src={item.img || '/placeholder.svg'}
+                                    alt={item.item}
+                                    className="w-full h-full object-contain p-1"
+                                    onError={(e) => {
+                                      e.currentTarget.src = '/placeholder.svg';
+                                    }}
+                                  />
+                                </div>
+                                
+                                {/* Add/Remove Button */}
+                                <div className="absolute top-2 left-2">
+                                  <Button
+                                    size="sm"
+                                    variant={addedItems.has(item.id) ? "default" : "secondary"}
+                                    className={`w-8 h-8 p-0 rounded-full ${
+                                      addedItems.has(item.id) 
+                                        ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                        : 'bg-green-100 hover:bg-green-200 text-green-600 border border-green-300'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (addedItems.has(item.id)) {
+                                        handleRemoveItemFromCard(item);
+                                      } else {
+                                        handleAddItemFromCard(item);
+                                      }
+                                    }}
+                                  >
+                                    {addedItems.has(item.id) ? (
+                                      <Check className="w-4 h-4" />
+                                    ) : (
+                                      <Plus className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                                
+                                {/* Heart Button */}
+                                <div className="absolute top-2 right-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="w-8 h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleSavedItem(item);
+                                    }}
+                                  >
+                                    <Heart 
+                                      className={`w-4 h-4 ${
+                                        savedItems.has(item.id)
+                                          ? 'fill-red-500 text-red-500'
+                                          : 'text-gray-400 hover:text-red-500'
+                                      }`}
+                                    />
+                                  </Button>
+                                </div>
+                                
+                                                                 {/* Price and Savings positioned above item name, aligned left */}
+                                 <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
+                                   {/* Price and Savings Row */}
+                                   <div className="flex items-center gap-1">
+                                     {/* Price Circle */}
+                                     {item.price && (
+                                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600">
+                                         <div className="text-center leading-tight">
+                                           {item.price.split(' ').map((part, index) => (
+                                             <div key={index}>
+                                               {part}
+                                             </div>
+                                           ))}
+                                         </div>
+                                       </div>
+                                     )}
 
-  try {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-3xl h-[90vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Add Specials</DialogTitle>
-            {lastUpdated && (
-              <div className="text-sm text-muted-foreground">
-                Last updated: {new Date(lastUpdated).toLocaleDateString()}
-              </div>
-            )}
-          </DialogHeader>
-          
-          <div className="flex flex-col flex-1 min-h-0">
-            {categoryGroups.length > 0 ? (
-              <div className="space-y-2 overflow-y-auto flex-1 pr-2">
-                {categoryGroups.map((group) => (
-                  <div key={group.name} className="border rounded-lg">
-                    <Button 
-                      variant="ghost" 
-                      className="w-full justify-between p-2 h-auto"
-                      onClick={() => toggleSpecialGroup(group.name)}
-                    >
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
-                        {group.name === 'On Special' ? (
-                          <span className="font-medium truncate text-red-600 flex items-center gap-1">
-                            <span className="w-2 h-2 bg-red-500 rounded-full"></span>
-                            {group.name}
-                          </span>
-                        ) : (
-                          <span className="font-medium truncate">{group.name}</span>
-                        )}
-                        <span className="text-sm text-muted-foreground flex-shrink-0">
-                          ({group.categories.reduce((acc, cat) => acc + cat.items.length, 0)} items)
-                        </span>
-                      </div>
-                      {group.isExpanded ? (
-                        <ChevronDown className="h-4 w-4 flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 flex-shrink-0" />
-                      )}
-                    </Button>
-                    {group.isExpanded && (
-                      <div className="space-y-2 p-2">
-                        {group.categories.map((category) => (
-                          <div key={category.name}>
-                            <Button
-                              variant="ghost"
-                              className="w-full justify-between p-2 h-auto text-sm"
-                              onClick={() => toggleCategory(group.name, category.name)}
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <Package className="h-4 w-4 flex-shrink-0" />
-                                <span className="font-medium truncate">{category.name}</span>
-                                <span className="text-xs text-muted-foreground flex-shrink-0">
-                                  ({category.items.length} items)
-                                </span>
+                                     {/* Savings Box */}
+                                     {item.discount && (
+                                       <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[60px]">
+                                         <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
+                                           {item.discount}
+                                         </p>
+                                       </div>
+                                     )}
+                                   </div>
+                                   
+                                   {/* Product Name at bottom, aligned left */}
+                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left line-clamp-2 md:line-clamp-none">
+                                     {item.item}
+                                   </p>
+                                 </div>
                               </div>
-                              {category.isExpanded ? (
-                                <ChevronDown className="h-4 w-4 flex-shrink-0" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 flex-shrink-0" />
-                              )}
-                            </Button>
-                            {category.isExpanded && category.loaded && (
-                              <div className="space-y-2 mt-2 pl-4">
-                                {category.items.map((item) => (
-                                  <Card key={item.id} className="p-3 shadow-card">
-                                    <div className="flex items-center justify-between gap-3">
-                                      {/* Image on the left */}
-                                      {item.img && (
-                                        <div className="flex-shrink-0 w-12 h-12">
-                                          <img 
-                                            src={item.img} 
-                                            alt={item.item}
-                                            className="w-full h-full object-cover rounded-md"
-                                            onError={(e) => {
-                                              // Hide image if it fails to load
-                                              e.currentTarget.style.display = 'none';
-                                            }}
-                                          />
-                                        </div>
-                                      )}
-                                      <div className="flex-1 min-w-0">
-                                        <TooltipProvider>
-                                          <Tooltip>
-                                            <TooltipTrigger asChild>
-                                              <div className="font-medium text-sm text-foreground truncate cursor-help">
-                                                {item.item}
-                                              </div>
-                                            </TooltipTrigger>
-                                            <TooltipContent side="top" className="max-w-xs">
-                                              <p className="break-words">{item.item}</p>
-                                            </TooltipContent>
-                                          </Tooltip>
-                                        </TooltipProvider>
-                                        {item.price && (
-                                          <TooltipProvider>
-                                            <Tooltip>
-                                              <TooltipTrigger asChild>
-                                                <div className="text-xs text-muted-foreground truncate cursor-help">
-                                                  {formatPrice(item.price, item.discount)}
-                                                </div>
-                                              </TooltipTrigger>
-                                              <TooltipContent side="top" className="max-w-xs">
-                                                <p className="break-words">{formatPrice(item.price, item.discount)}</p>
-                                              </TooltipContent>
-                                            </Tooltip>
-                                          </TooltipProvider>
-                                        )}
-                                      </div>
-                                      <div className="flex items-center gap-2 flex-shrink-0">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => updateQuantity(item.id, -1)}
-                                          disabled={item.selectedQuantity <= 0}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <Minus className="h-3 w-3" />
-                                        </Button>
-                                        <span className="text-sm font-medium min-w-[2rem] text-center">
-                                          {item.selectedQuantity}
-                                        </span>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => updateQuantity(item.id, 1)}
-                                          className="h-8 w-8 p-0"
-                                        >
-                                          <Plus className="h-3 w-3" />
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </Card>
-                                ))}
-                              </div>
-                            )}
-                          </div>
+                            </CardContent>
+                          </Card>
                         ))}
                       </div>
-                    )}
-                  </div>
-                ))}
+                    </CarouselItem>
+                  ))}
+                </CarouselContent>
+                <CarouselPrevious className="absolute left-[-8px] top-1/2 -translate-y-1/2" />
+                <CarouselNext className="absolute right-[-8px] top-1/2 -translate-y-1/2" />
               </div>
-            ) : (
-              <div className="text-center py-8 flex-1 flex items-center justify-center">
-                <div className="text-muted-foreground">
-                  No specials items available at the moment.
-                </div>
+              <div className="text-center text-sm text-muted-foreground pt-2">
+                Page {currentPage} of {totalPages}
               </div>
-            )}
-
-            <div className="flex gap-2 pt-4 border-t flex-shrink-0 mt-4">
-              <Button
-                variant="outline"
-                onClick={onClose}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={addSelectedItems}
-                disabled={selectedCount === 0}
-                className="flex-1"
-              >
-                Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  } catch (error) {
-    console.error('Error rendering SpecialsModal:', error);
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Add Specials</DialogTitle>
-          </DialogHeader>
-          <div className="text-center py-8">
-            <div className="text-muted-foreground">Error loading specials modal. Please try again.</div>
-            <Button onClick={onClose} className="mt-4">
+            </Carousel>
+          )}
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={onClose} className="w-full">
               Close
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
-    );
-  }
+
+      {/* Detail View Dialog */}
+      {detailViewItem && (
+        <Dialog open={isDetailViewOpen} onOpenChange={() => {
+          setIsDetailViewOpen(false);
+          setDetailViewItem(null);
+          setDetailQuantity(1);
+        }}>
+          <DialogContent className="sm:max-w-xl">
+            <DialogHeader className="relative">
+              <DialogTitle>Add to List</DialogTitle>
+              {/* Heart Icon */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="absolute top-0 right-0 p-2"
+                onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem)}
+              >
+                <Heart 
+                  className={`w-5 h-5 ${
+                    detailViewItem && savedItems.has(detailViewItem.id)
+                      ? 'fill-red-500 text-red-500'
+                      : 'text-gray-400 hover:text-red-500'
+                  }`}
+                />
+              </Button>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 pt-4">
+              <img
+                src={detailViewItem.img || '/placeholder.svg'}
+                alt={detailViewItem.item}
+                className="w-32 h-32 object-contain rounded-lg"
+                onError={(e) => {
+                  e.currentTarget.src = '/placeholder.svg';
+                }}
+              />
+                             <div className="w-full px-4 min-w-0">
+                 <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
+                 {detailViewItem.price && (
+                   <div className="mb-4">
+                     <div className="flex items-center justify-center gap-2">
+                       {/* Price Circle */}
+                       <div className="w-32 h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600">
+                         <div className="text-center leading-tight">
+                           {detailViewItem.price.split(' ').map((part, index) => (
+                             <div key={index}>
+                               {part}
+                             </div>
+                           ))}
+                         </div>
+                       </div>
+                       
+                       {/* Savings Box */}
+                       {detailViewItem.discount && (
+                         <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[200px]">
+                           <p className="text-sm font-bold text-gray-800 leading-tight text-center">
+                             {detailViewItem.discount}
+                           </p>
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                 )}
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-4 mt-4">
+              {/* Quantity Counter */}
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (detailQuantity > 1) {
+                      setDetailQuantity(detailQuantity - 1);
+                    }
+                  }}
+                  className="w-8 h-8 p-0"
+                  disabled={detailQuantity <= 1}
+                >
+                  -
+                </Button>
+                <span className="text-lg font-semibold min-w-[2rem] text-center">{detailQuantity}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (detailQuantity < 99) {
+                      setDetailQuantity(detailQuantity + 1);
+                    }
+                  }}
+                  className="w-8 h-8 p-0"
+                  disabled={detailQuantity >= 99}
+                >
+                  +
+                </Button>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-2 justify-center w-full">
+                <Button variant="outline" onClick={() => {
+                  setIsDetailViewOpen(false);
+                  setDetailViewItem(null);
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  handleAddItem(detailViewItem, detailQuantity);
+                  // Also update the addedItems state to show tick in specials modal
+                  if (detailViewItem) {
+                    setAddedItems(prev => new Set(prev).add(detailViewItem.id));
+                  }
+                }}>
+                  Add to List
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
+  );
 }

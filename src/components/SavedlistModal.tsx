@@ -12,6 +12,7 @@ interface SavedlistItem {
   Item: string;
   Quantity: number;
   user_id?: string;
+  img?: string;
 }
 
 interface SelectedSavedlistItem extends SavedlistItem {
@@ -365,11 +366,24 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
               {savedlistItems.map((item) => (
                 <Card key={item.id} className="p-3 shadow-card">
                   <div className="flex items-center justify-between">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-foreground truncate">
-                        {item.Item}
+                    <div className="flex items-center gap-3 flex-1">
+                      {item.img && (
+                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                          <img
+                            src={item.img}
+                            alt={item.Item}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-foreground truncate">
+                          {item.Item}
+                        </div>
                       </div>
-                      
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
