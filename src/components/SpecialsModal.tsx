@@ -187,7 +187,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-md sm:max-w-lg h-[80vh] flex flex-col p-4 sm:p-6">
+                 <DialogContent className="w-full max-w-md sm:max-w-lg h-[85vh] max-h-[700px] flex flex-col p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Specials</DialogTitle>
           </DialogHeader>
@@ -205,25 +205,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-1 h-full">
+                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-4 h-full min-h-0">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col items-center justify-center text-center cursor-pointer overflow-hidden relative"
+                                                         className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0"
                             onClick={() => handleItemClick(item)}
                           >
-                            <CardContent className="p-2 flex flex-col items-center justify-center flex-1 w-full">
-                              <div className="w-full aspect-square flex items-center justify-center">
-                                <img
-                                  src={item.img || '/placeholder.svg'}
-                                  alt={item.item}
-                                  className="max-w-full max-h-full object-contain"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/placeholder.svg';
-                                  }}
-                                />
-                              </div>
-                              <p className="text-xs font-medium leading-tight line-clamp-2 mt-2">
+                                                         <CardContent className="p-2 flex flex-col flex-1 w-full min-h-0">
+                               <div className="flex-1 w-full overflow-hidden flex justify-center items-center aspect-square">
+                                 <img
+                                   src={item.img || '/placeholder.svg'}
+                                   alt={item.item}
+                                   className="w-full h-full object-contain"
+                                   onError={(e) => {
+                                     e.currentTarget.src = '/placeholder.svg';
+                                   }}
+                                 />
+                               </div>
+                              <p className="text-xs font-medium leading-tight line-clamp-2 mt-1 flex-shrink-0">
                                 {item.item}
                               </p>
                             </CardContent>
