@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/carousel";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { QuantitySelector } from "./QuantitySelector"; // Assuming this will be adapted or used
+import { QuantitySelector } from "./QuantitySelector";
 import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SpecialsItem {
@@ -88,11 +88,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       const { data, error } = await supabase
         .from('specials')
         .select('*')
-        .order('on_special', { ascending: false }) // Show specials first
+        .order('on_special', { ascending: false })
         .order('item', { ascending: true });
 
       if (error) throw error;
 
+      console.log('Specials data:', data);
       setSpecials(data || []);
     } catch (error) {
       toast({
@@ -184,12 +185,14 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
     }
   };
 
+
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-                 <DialogContent className="w-full max-w-md sm:max-w-lg h-[90vh] max-h-[750px] flex flex-col p-3 sm:p-4">
+        <DialogContent className="w-full max-w-2xl h-screen flex flex-col p-3 sm:p-4">
           <DialogHeader>
-            <DialogTitle>Specials</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
@@ -200,39 +203,58 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
               <p className="text-muted-foreground">No specials available right now.</p>
             </div>
           ) : (
-            <Carousel setApi={setCarouselApi} className="flex-1 flex flex-col justify-between h-full">
+            <Carousel setApi={setCarouselApi} className="flex-1 flex flex-col justify-between">
               <div className="relative flex-1">
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                                             <div className="grid grid-cols-3 gap-1 p-2 h-full min-h-0">
+                      <div className="grid grid-cols-3 gap-1 p-2 h-full">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0 border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
-                            <CardContent className="p-1 flex flex-col flex-1 w-full min-h-0">
-                                <div className="relative flex-1 w-full overflow-hidden flex justify-center items-center aspect-square">
-                                    <img
-                                        src={item.img || '/placeholder.svg'}
-                                        alt={item.item}
-                                        className="w-full h-full object-contain"
-                                        onError={(e) => {
-                                            e.currentTarget.src = '/placeholder.svg';
-                                        }}
-                                    />
-                                    <p className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-[10px] font-medium leading-tight p-1 text-center line-clamp-2">
-                                        {item.item}
-                                    </p>
+                            <CardContent className="p-1 flex flex-col w-full h-full">
+                              {/* Product Image with Overlay */}
+                              <div className="relative w-full aspect-square overflow-hidden flex justify-center items-center bg-gray-50 rounded-lg">
+                                <img
+                                  src={item.img || '/placeholder.svg'}
+                                  alt={item.item}
+                                  className="w-full h-full object-contain p-1 max-w-full max-h-full"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/placeholder.svg';
+                                  }}
+                                />
+                                
+                                {/* Overlay at bottom of image */}
+                                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1">
+                                  {/* Product Name */}
+                                  <p className="text-[10px] font-semibold text-white leading-tight line-clamp-1 text-center mb-1">
+                                    {item.item}
+                                  </p>
+                                  
+                                  {/* Price and Savings Row */}
+                                  <div className="flex items-center justify-center gap-1">
+                                    {/* Price Circle */}
+                                    {item.price && (
+                                      <div className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-[8px] shadow-lg border border-red-600">
+                                        {item.price}
+                                      </div>
+                                    )}
+
+                                    {/* Savings Box */}
+                                    {item.discount && (
+                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm flex-1 max-w-[60px]">
+                                        <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
+                                          {item.discount}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
+                              </div>
                             </CardContent>
-                            {item.price && (
-                                <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-[10px] p-1 rounded">
-                                    {item.price}
-                                    {item.discount && ` (${item.discount})`}
-                                </div>
-                            )}
                           </Card>
                         ))}
                       </div>
@@ -242,12 +264,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 <CarouselPrevious className="absolute left-[-8px] top-1/2 -translate-y-1/2" />
                 <CarouselNext className="absolute right-[-8px] top-1/2 -translate-y-1/2" />
               </div>
-              <div className="text-center text-sm text-muted-foreground pt-1">
+              <div className="text-center text-sm text-muted-foreground pt-2">
                 Page {currentPage} of {totalPages}
               </div>
             </Carousel>
           )}
-          <DialogFooter className="mt-2">
+          <DialogFooter className="mt-4">
             <Button variant="outline" onClick={onClose} className="w-full">
               Close
             </Button>
@@ -257,29 +279,52 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
       {/* Detail View Dialog */}
       {detailViewItem && (
-        <QuantitySelector
-          isOpen={isDetailViewOpen}
-          onClose={() => {
-            setIsDetailViewOpen(false);
-            setDetailViewItem(null);
-          }}
-          onConfirm={(quantity) => handleAddItem(detailViewItem, quantity)}
-          itemName={detailViewItem.item}
-          maxQuantity={99}
-          actionType="add"
-        >
-          <div className="flex flex-col items-center gap-4 pt-4">
+        <Dialog open={isDetailViewOpen} onOpenChange={() => {
+          setIsDetailViewOpen(false);
+          setDetailViewItem(null);
+        }}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add to List</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-center gap-4 pt-4">
               <img
-                  src={detailViewItem.img || '/placeholder.svg'}
-                  alt={detailViewItem.item}
-                  className="w-32 h-32 object-contain rounded-lg"
-                  onError={(e) => {
-                      e.currentTarget.src = '/placeholder.svg';
-                  }}
+                src={detailViewItem.img || '/placeholder.svg'}
+                alt={detailViewItem.item}
+                className="w-32 h-32 object-contain rounded-lg"
+                onError={(e) => {
+                  e.currentTarget.src = '/placeholder.svg';
+                }}
               />
-              <p className="text-lg font-bold">{detailViewItem.price}</p>
-          </div>
-        </QuantitySelector>
+              <div className="text-center">
+                <h3 className="font-semibold text-lg mb-2">{detailViewItem.item}</h3>
+                                 {detailViewItem.price && (
+                   <div className="mb-4">
+                     <div className="w-20 h-20 mx-auto bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600 mb-2">
+                       {detailViewItem.price}
+                     </div>
+                     {detailViewItem.discount && (
+                       <p className="text-sm text-gray-600">{detailViewItem.discount}</p>
+                     )}
+                   </div>
+                 )}
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button variant="outline" onClick={() => {
+                setIsDetailViewOpen(false);
+                setDetailViewItem(null);
+              }}>
+                Cancel
+              </Button>
+              <Button onClick={() => {
+                handleAddItem(detailViewItem, 1);
+              }}>
+                Add to List
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </>
   );
