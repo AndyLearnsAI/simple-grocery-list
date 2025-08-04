@@ -55,6 +55,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
   const [detailViewItem, setDetailViewItem] = useState<SpecialsItem | null>(null);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
+  const [detailQuantity, setDetailQuantity] = useState(1);
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -230,12 +231,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                 </div>
                                 
                                                                  {/* Price and Savings positioned above item name, aligned left */}
-                                 <div className="absolute bottom-8 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
+                                 <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
                                    {/* Price and Savings Row */}
                                    <div className="flex items-center gap-1">
                                      {/* Price Circle */}
                                      {item.price && (
-                                       <div className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-[8px] shadow-lg border border-red-600">
+                                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600">
                                          {item.price}
                                        </div>
                                      )}
@@ -251,7 +252,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                    </div>
                                    
                                    {/* Product Name at bottom, aligned left */}
-                                   <p className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2 text-left">
+                                   <p className="text-[10px] font-semibold text-gray-800 leading-tight text-left">
                                      {item.item}
                                    </p>
                                  </div>
@@ -284,8 +285,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
         <Dialog open={isDetailViewOpen} onOpenChange={() => {
           setIsDetailViewOpen(false);
           setDetailViewItem(null);
+          setDetailQuantity(1);
         }}>
-          <DialogContent className="sm:max-w-md">
+          <DialogContent className="sm:max-w-xl">
             <DialogHeader>
               <DialogTitle>Add to List</DialogTitle>
             </DialogHeader>
@@ -298,13 +300,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                   e.currentTarget.src = '/placeholder.svg';
                 }}
               />
-                             <div className="text-center">
-                 <h3 className="font-semibold text-lg mb-2">{detailViewItem.item}</h3>
+                             <div className="w-full px-4 min-w-0">
+                 <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
                  {detailViewItem.price && (
                    <div className="mb-4">
                      <div className="flex items-center justify-center gap-2">
                        {/* Price Circle */}
-                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-lg border-2 border-red-600">
+                       <div className="w-32 h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600">
                          {detailViewItem.price}
                        </div>
                        
@@ -321,18 +323,52 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                  )}
               </div>
             </div>
-            <div className="flex gap-2 justify-end mt-4">
-              <Button variant="outline" onClick={() => {
-                setIsDetailViewOpen(false);
-                setDetailViewItem(null);
-              }}>
-                Cancel
-              </Button>
-              <Button onClick={() => {
-                handleAddItem(detailViewItem, 1);
-              }}>
-                Add to List
-              </Button>
+            <div className="flex flex-col items-center gap-4 mt-4">
+              {/* Quantity Counter */}
+              <div className="flex items-center gap-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (detailQuantity > 1) {
+                      setDetailQuantity(detailQuantity - 1);
+                    }
+                  }}
+                  className="w-8 h-8 p-0"
+                  disabled={detailQuantity <= 1}
+                >
+                  -
+                </Button>
+                <span className="text-lg font-semibold min-w-[2rem] text-center">{detailQuantity}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    if (detailQuantity < 99) {
+                      setDetailQuantity(detailQuantity + 1);
+                    }
+                  }}
+                  className="w-8 h-8 p-0"
+                  disabled={detailQuantity >= 99}
+                >
+                  +
+                </Button>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-2 justify-center w-full">
+                <Button variant="outline" onClick={() => {
+                  setIsDetailViewOpen(false);
+                  setDetailViewItem(null);
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={() => {
+                  handleAddItem(detailViewItem, detailQuantity);
+                }}>
+                  Add to List
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
