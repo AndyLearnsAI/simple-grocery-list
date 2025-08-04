@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ interface QuantitySelectorProps {
   onConfirm: (quantity: number) => void;
   itemName: string;
   maxQuantity: number;
-  actionType: 'purchase' | 'delete' | 'restore';
+  actionType: 'purchase' | 'delete' | 'restore' | 'add';
 }
 
 export function QuantitySelector({ 
@@ -21,7 +21,13 @@ export function QuantitySelector({
   maxQuantity, 
   actionType 
 }: QuantitySelectorProps) {
-  const [selectedQuantity, setSelectedQuantity] = useState(maxQuantity);
+  const [selectedQuantity, setSelectedQuantity] = useState(actionType === 'add' ? 1 : maxQuantity);
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedQuantity(actionType === 'add' ? 1 : maxQuantity);
+    }
+  }, [isOpen, actionType, maxQuantity]);
 
   const handleConfirm = () => {
     if (selectedQuantity > 0 && selectedQuantity <= maxQuantity) {
@@ -34,9 +40,14 @@ export function QuantitySelector({
     switch (actionType) {
       case 'purchase': return 'mark as purchased';
       case 'restore': return 'restore';
+      case 'add': return 'add to list';
       default: return 'process';
     }
   };
+
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
