@@ -1,6 +1,3 @@
-import { useIsMobile } from "@/hooks/use-mobile"
-import { useToast } from "@/hooks/use-toast"
-
 import {
   Toast,
   ToastClose,
@@ -8,15 +5,15 @@ import {
   ToastProvider,
   ToastTitle,
   ToastViewport,
-} from "./toast"
+} from "@/components/ui/toast"
+import { useToast } from "@/hooks/use-toast"
 
 export function Toaster() {
   const { toasts } = useToast()
-  const isMobile = useIsMobile()
 
   return (
     <ToastProvider>
-      {toasts.map(({ id, title, description, action, ...props }) => {
+      {toasts.map(function ({ id, title, description, action, ...props }) {
         return (
           <Toast key={id} {...props}>
             <div className="grid gap-1">
@@ -30,7 +27,7 @@ export function Toaster() {
           </Toast>
         )
       })}
-      <ToastViewport data-orientation={isMobile ? "bottom" : "top"} />
+      <ToastViewport />
     </ToastProvider>
   )
 }
