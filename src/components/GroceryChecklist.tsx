@@ -126,7 +126,8 @@ export function GroceryChecklist() {
             Item: item.Item,
             Quantity: selectedQuantity,
             user_id: user.data.user.id,
-            last_bought: new Date().toISOString()
+            last_bought: new Date().toISOString(),
+            img: item.img
           }
         ])
         .select()
@@ -493,7 +494,8 @@ export function GroceryChecklist() {
         console.log('➕ Adding purchased item back as new item:', {
           Item: itemToUndo.Item,
           Quantity: itemToUndo.Quantity || 1,
-          user_id: user.data.user.id
+          user_id: user.data.user.id,
+          img: itemToUndo.img
         });
         
         const { data, error } = await supabase
@@ -502,7 +504,8 @@ export function GroceryChecklist() {
             {
               Item: itemToUndo.Item,
               Quantity: itemToUndo.Quantity || 1,
-              user_id: user.data.user.id
+              user_id: user.data.user.id,
+              img: itemToUndo.img
             }
           ])
           .select()
@@ -546,7 +549,8 @@ export function GroceryChecklist() {
         console.log('➕ Adding deleted item back as new item:', {
           Item: itemToUndo.Item,
           Quantity: itemToUndo.Quantity || 1,
-          user_id: user.data.user.id
+          user_id: user.data.user.id,
+          img: itemToUndo.img
         });
         
         const { data, error } = await supabase
@@ -555,7 +559,8 @@ export function GroceryChecklist() {
             {
               Item: itemToUndo.Item,
               Quantity: itemToUndo.Quantity || 1,
-              user_id: user.data.user.id
+              user_id: user.data.user.id,
+              img: itemToUndo.img
             }
           ])
           .select()
