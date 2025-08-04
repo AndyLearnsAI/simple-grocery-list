@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { X, Plus, Minus } from "lucide-react";
+import { X, Plus, Minus, Check } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,9 +44,10 @@ interface SpecialsModalProps {
     items: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
     addedItemIds: number[];
   }) => void;
+  onModalClose?: () => void;
 }
 
-export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalProps) {
+export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: SpecialsModalProps) {
   const [specials, setSpecials] = useState<SpecialsItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
@@ -56,6 +57,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const [detailViewItem, setDetailViewItem] = useState<SpecialsItem | null>(null);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [detailQuantity, setDetailQuantity] = useState(1);
+  const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -66,6 +68,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       fetchSpecialsItems();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (isOpen && specials.length > 0) {
+      checkExistingItems();
+    }
+  }, [isOpen, specials]);
 
   useEffect(() => {
     if (!carouselApi) return;
@@ -82,6 +90,35 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       carouselApi.off("select", onSelect);
     };
   }, [carouselApi]);
+
+  const checkExistingItems = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: existingItems, error } = await supabase
+        .from('Grocery list')
+        .select('Item')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItemNames = new Set(existingItems?.map(item => normalize(item.Item)) || []);
+
+      // Check which specials items already exist in the grocery list
+      const alreadyAddedItems = new Set<number>();
+      specials.forEach(special => {
+        if (existingItemNames.has(normalize(special.item))) {
+          alreadyAddedItems.add(special.id);
+        }
+      });
+
+      setAddedItems(alreadyAddedItems);
+    } catch (error) {
+      console.error('Error checking existing items:', error);
+    }
+  };
 
   const fetchSpecialsItems = async () => {
     setLoading(true);
@@ -122,6 +159,114 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const handleItemClick = (item: SpecialsItem) => {
     setDetailViewItem(item);
     setIsDetailViewOpen(true);
+  };
+
+  const handleAddItemFromCard = async (item: SpecialsItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const { data: existingItems, error: fetchError } = await supabase
+        .from('Grocery list')
+        .select('id, Item, Quantity')
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItem = existingItems?.find(i => normalize(i.Item) === normalize(item.item));
+
+      let addedItemId: number;
+      let wasNew = false;
+      let originalQuantity = 0;
+
+      if (existingItem) {
+        originalQuantity = existingItem.Quantity || 0;
+        const newQuantity = originalQuantity + 1;
+        const { error } = await supabase
+          .from('Grocery list')
+          .update({ Quantity: newQuantity })
+          .eq('id', existingItem.id);
+        if (error) throw error;
+        addedItemId = existingItem.id;
+      } else {
+        wasNew = true;
+        const { data: newItem, error } = await supabase
+          .from('Grocery list')
+          .insert({ Item: item.item, Quantity: 1, user_id: user.id })
+          .select('id')
+          .single();
+        if (error) throw error;
+        addedItemId = newItem.id;
+      }
+
+      onItemsAdded({
+        items: [{ item: item.item, quantity: 1, wasNew, originalQuantity }],
+        addedItemIds: [addedItemId],
+      });
+
+      // Add to addedItems set
+      setAddedItems(prev => new Set(prev).add(item.id));
+
+      toast({
+        title: "Item Added",
+        description: `${item.item} added to your list.`,
+      });
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Adding Item",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleRemoveItemFromCard = async (item: SpecialsItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      const { data: existingItems, error: fetchError } = await supabase
+        .from('Grocery list')
+        .select('id, Item, Quantity')
+        .eq('user_id', user.id);
+
+      if (fetchError) throw fetchError;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const existingItem = existingItems?.find(i => normalize(i.Item) === normalize(item.item));
+
+      if (existingItem) {
+        // Remove item completely regardless of quantity
+        const { error } = await supabase
+          .from('Grocery list')
+          .delete()
+          .eq('id', existingItem.id);
+        if (error) throw error;
+      }
+
+      // Remove from addedItems set
+      setAddedItems(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(item.id);
+        return newSet;
+      });
+
+      toast({
+        title: "Item Removed",
+        description: `All quantities of ${item.item} removed from your list.`,
+      });
+
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error Removing Item",
+        description: message,
+        variant: "destructive",
+      });
+    }
   };
 
   const handleAddItem = async (item: SpecialsItem, quantity: number) => {
@@ -190,7 +335,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+          onModalClose?.();
+        }
+      }}>
         <DialogContent className="w-full max-w-2xl h-[90vh] flex flex-col p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
@@ -213,7 +363,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[3/4] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[2/3] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
@@ -230,6 +380,33 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                   />
                                 </div>
                                 
+                                {/* Add/Remove Button */}
+                                <div className="absolute top-2 left-2">
+                                  <Button
+                                    size="sm"
+                                    variant={addedItems.has(item.id) ? "default" : "secondary"}
+                                    className={`w-8 h-8 p-0 rounded-full ${
+                                      addedItems.has(item.id) 
+                                        ? 'bg-green-500 hover:bg-green-600 text-white' 
+                                        : 'bg-green-100 hover:bg-green-200 text-green-600 border border-green-300'
+                                    }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (addedItems.has(item.id)) {
+                                        handleRemoveItemFromCard(item);
+                                      } else {
+                                        handleAddItemFromCard(item);
+                                      }
+                                    }}
+                                  >
+                                    {addedItems.has(item.id) ? (
+                                      <Check className="w-4 h-4" />
+                                    ) : (
+                                      <Plus className="w-4 h-4" />
+                                    )}
+                                  </Button>
+                                </div>
+                                
                                                                  {/* Price and Savings positioned above item name, aligned left */}
                                  <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
                                    {/* Price and Savings Row */}
@@ -237,7 +414,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                      {/* Price Circle */}
                                      {item.price && (
                                        <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600">
-                                         {item.price}
+                                         <div className="text-center leading-tight">
+                                           {item.price.split(' ').map((part, index) => (
+                                             <div key={index}>
+                                               {part}
+                                             </div>
+                                           ))}
+                                         </div>
                                        </div>
                                      )}
 
@@ -252,7 +435,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                                    </div>
                                    
                                    {/* Product Name at bottom, aligned left */}
-                                   <p className="text-[10px] font-semibold text-gray-800 leading-tight text-left">
+                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left">
                                      {item.item}
                                    </p>
                                  </div>
