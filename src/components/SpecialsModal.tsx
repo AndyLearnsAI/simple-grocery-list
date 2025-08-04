@@ -21,6 +21,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { QuantitySelector } from "./QuantitySelector"; // Assuming this will be adapted or used
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface SpecialsItem {
   id: number;
@@ -45,8 +46,6 @@ interface SpecialsModalProps {
   }) => void;
 }
 
-const ITEMS_PER_PAGE = 9;
-
 export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalProps) {
   const [specials, setSpecials] = useState<SpecialsItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -58,6 +57,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
 
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const ITEMS_PER_PAGE = isMobile ? 8 : 9;
 
   useEffect(() => {
     if (isOpen) {
@@ -110,7 +111,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
       p.push(specials.slice(i, i + ITEMS_PER_PAGE));
     }
     return p;
-  }, [specials]);
+  }, [specials, ITEMS_PER_PAGE]);
 
   useEffect(() => {
     setTotalPages(pages.length);
@@ -204,26 +205,34 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-3 grid-rows-3 gap-2 p-1 h-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-1 h-full">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col items-center justify-center text-center cursor-pointer overflow-hidden"
+                            className="flex flex-col items-center justify-center text-center cursor-pointer overflow-hidden relative"
                             onClick={() => handleItemClick(item)}
                           >
-                            <CardContent className="p-2 flex flex-col items-center justify-center flex-1">
-                              <img
-                                src={item.img || '/placeholder.svg'}
-                                alt={item.item}
-                                className="w-16 h-16 object-contain mb-2"
-                                onError={(e) => {
-                                  e.currentTarget.src = '/placeholder.svg';
-                                }}
-                              />
-                              <p className="text-xs font-medium leading-tight line-clamp-2">
+                            <CardContent className="p-2 flex flex-col items-center justify-center flex-1 w-full">
+                              <div className="w-full aspect-square flex items-center justify-center">
+                                <img
+                                  src={item.img || '/placeholder.svg'}
+                                  alt={item.item}
+                                  className="max-w-full max-h-full object-contain"
+                                  onError={(e) => {
+                                    e.currentTarget.src = '/placeholder.svg';
+                                  }}
+                                />
+                              </div>
+                              <p className="text-xs font-medium leading-tight line-clamp-2 mt-2">
                                 {item.item}
                               </p>
                             </CardContent>
+                            {item.price && (
+                              <div className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs p-1 rounded">
+                                {item.price}
+                                {item.discount && ` (${item.discount})`}
+                              </div>
+                            )}
                           </Card>
                         ))}
                       </div>
