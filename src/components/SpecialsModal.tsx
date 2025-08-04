@@ -190,7 +190,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="w-full max-w-2xl h-screen flex flex-col p-3 sm:p-4">
+        <DialogContent className="w-full max-w-2xl h-[90vh] flex flex-col p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
@@ -212,47 +212,49 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0 border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[3/4] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
-                              {/* Product Image with Overlay */}
-                              <div className="relative w-full aspect-square overflow-hidden flex justify-center items-center bg-gray-50 rounded-lg">
-                                <img
-                                  src={item.img || '/placeholder.svg'}
-                                  alt={item.item}
-                                  className="w-full h-full object-contain p-1 max-w-full max-h-full"
-                                  onError={(e) => {
-                                    e.currentTarget.src = '/placeholder.svg';
-                                  }}
-                                />
-                                
-                                {/* Overlay at bottom of image */}
-                                <div className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 p-1">
-                                  {/* Product Name */}
-                                  <p className="text-[10px] font-semibold text-white leading-tight line-clamp-1 text-center mb-1">
-                                    {item.item}
-                                  </p>
-                                  
-                                  {/* Price and Savings Row */}
-                                  <div className="flex items-center justify-center gap-1">
-                                    {/* Price Circle */}
-                                    {item.price && (
-                                      <div className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-[8px] shadow-lg border border-red-600">
-                                        {item.price}
-                                      </div>
-                                    )}
-
-                                    {/* Savings Box */}
-                                    {item.discount && (
-                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm flex-1 max-w-[60px]">
-                                        <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
-                                          {item.discount}
-                                        </p>
-                                      </div>
-                                    )}
-                                  </div>
+                              {/* Product Image positioned top right, covering 75% of card */}
+                              <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
+                                <div className="absolute top-0 right-0 w-3/4 h-3/4">
+                                  <img
+                                    src={item.img || '/placeholder.svg'}
+                                    alt={item.item}
+                                    className="w-full h-full object-contain p-1"
+                                    onError={(e) => {
+                                      e.currentTarget.src = '/placeholder.svg';
+                                    }}
+                                  />
                                 </div>
+                                
+                                                                 {/* Price and Savings positioned above item name, aligned left */}
+                                 <div className="absolute bottom-8 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
+                                   {/* Price and Savings Row */}
+                                   <div className="flex items-center gap-1">
+                                     {/* Price Circle */}
+                                     {item.price && (
+                                       <div className="w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-[8px] shadow-lg border border-red-600">
+                                         {item.price}
+                                       </div>
+                                     )}
+
+                                     {/* Savings Box */}
+                                     {item.discount && (
+                                       <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[60px]">
+                                         <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
+                                           {item.discount}
+                                         </p>
+                                       </div>
+                                     )}
+                                   </div>
+                                   
+                                   {/* Product Name at bottom, aligned left */}
+                                   <p className="text-[10px] font-semibold text-gray-800 leading-tight line-clamp-2 text-left">
+                                     {item.item}
+                                   </p>
+                                 </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -296,16 +298,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                   e.currentTarget.src = '/placeholder.svg';
                 }}
               />
-              <div className="text-center">
-                <h3 className="font-semibold text-lg mb-2">{detailViewItem.item}</h3>
-                                 {detailViewItem.price && (
+                             <div className="text-center">
+                 <h3 className="font-semibold text-lg mb-2">{detailViewItem.item}</h3>
+                 {detailViewItem.price && (
                    <div className="mb-4">
-                     <div className="w-20 h-20 mx-auto bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600 mb-2">
-                       {detailViewItem.price}
+                     <div className="flex items-center justify-center gap-2">
+                       {/* Price Circle */}
+                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm shadow-lg border-2 border-red-600">
+                         {detailViewItem.price}
+                       </div>
+                       
+                       {/* Savings Box */}
+                       {detailViewItem.discount && (
+                         <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[200px]">
+                           <p className="text-sm font-bold text-gray-800 leading-tight text-center">
+                             {detailViewItem.discount}
+                           </p>
+                         </div>
+                       )}
                      </div>
-                     {detailViewItem.discount && (
-                       <p className="text-sm text-gray-600">{detailViewItem.discount}</p>
-                     )}
                    </div>
                  )}
               </div>
