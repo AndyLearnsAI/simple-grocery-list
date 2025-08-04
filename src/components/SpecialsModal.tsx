@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { X, Plus, Minus, Check } from "lucide-react";
+import { X, Plus, Minus, Check, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -58,6 +58,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [detailQuantity, setDetailQuantity] = useState(1);
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
+  const [savedItems, setSavedItems] = useState<Set<number>>(new Set());
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -72,6 +73,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   useEffect(() => {
     if (isOpen && specials.length > 0) {
       checkExistingItems();
+      checkSavedItems();
     }
   }, [isOpen, specials]);
 
@@ -117,6 +119,35 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       setAddedItems(alreadyAddedItems);
     } catch (error) {
       console.error('Error checking existing items:', error);
+    }
+  };
+
+  const checkSavedItems = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: savedItemsData, error } = await supabase
+        .from('SavedlistItems')
+        .select('Item')
+        .eq('user_id', user.id);
+
+      if (error) throw error;
+
+      const normalize = (name: string) => name.toLowerCase().trim();
+      const savedItemNames = new Set(savedItemsData?.map(item => normalize(item.Item)) || []);
+
+      // Check which specials items are already saved
+      const alreadySavedItems = new Set<number>();
+      specials.forEach(special => {
+        if (savedItemNames.has(normalize(special.item))) {
+          alreadySavedItems.add(special.id);
+        }
+      });
+
+      setSavedItems(alreadySavedItems);
+    } catch (error) {
+      console.error('Error checking saved items:', error);
     }
   };
 
@@ -217,6 +248,56 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       const message = error instanceof Error ? error.message : "An unknown error occurred.";
       toast({
         title: "Error Adding Item",
+        description: message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleToggleSavedItem = async (item: SpecialsItem) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("User not authenticated");
+
+      if (savedItems.has(item.id)) {
+        // Remove from saved list
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('Item', item.item);
+
+        if (error) throw error;
+
+        setSavedItems(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(item.id);
+          return newSet;
+        });
+
+        toast({
+          title: "Item Removed",
+          description: `${item.item} removed from saved list.`,
+        });
+      } else {
+        // Add to saved list
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .insert({ Item: item.item, user_id: user.id });
+
+        if (error) throw error;
+
+        setSavedItems(prev => new Set(prev).add(item.id));
+
+        toast({
+          title: "Item Saved",
+          description: `${item.item} added to saved list.`,
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "An unknown error occurred.";
+      toast({
+        title: "Error",
         description: message,
         variant: "destructive",
       });
@@ -407,6 +488,27 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   </Button>
                                 </div>
                                 
+                                {/* Heart Button */}
+                                <div className="absolute top-2 right-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="w-8 h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleSavedItem(item);
+                                    }}
+                                  >
+                                    <Heart 
+                                      className={`w-4 h-4 ${
+                                        savedItems.has(item.id)
+                                          ? 'fill-red-500 text-red-500'
+                                          : 'text-gray-400 hover:text-red-500'
+                                      }`}
+                                    />
+                                  </Button>
+                                </div>
+                                
                                                                  {/* Price and Savings positioned above item name, aligned left */}
                                  <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
                                    {/* Price and Savings Row */}
@@ -435,7 +537,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                    </div>
                                    
                                    {/* Product Name at bottom, aligned left */}
-                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left">
+                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left line-clamp-2 md:line-clamp-none">
                                      {item.item}
                                    </p>
                                  </div>
@@ -471,8 +573,23 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           setDetailQuantity(1);
         }}>
           <DialogContent className="sm:max-w-xl">
-            <DialogHeader>
+            <DialogHeader className="relative">
               <DialogTitle>Add to List</DialogTitle>
+              {/* Heart Icon */}
+              <Button
+                size="sm"
+                variant="ghost"
+                className="absolute top-0 right-0 p-2"
+                onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem)}
+              >
+                <Heart 
+                  className={`w-5 h-5 ${
+                    detailViewItem && savedItems.has(detailViewItem.id)
+                      ? 'fill-red-500 text-red-500'
+                      : 'text-gray-400 hover:text-red-500'
+                  }`}
+                />
+              </Button>
             </DialogHeader>
             <div className="flex flex-col items-center gap-4 pt-4">
               <img
@@ -490,7 +607,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                      <div className="flex items-center justify-center gap-2">
                        {/* Price Circle */}
                        <div className="w-32 h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600">
-                         {detailViewItem.price}
+                         <div className="text-center leading-tight">
+                           {detailViewItem.price.split(' ').map((part, index) => (
+                             <div key={index}>
+                               {part}
+                             </div>
+                           ))}
+                         </div>
                        </div>
                        
                        {/* Savings Box */}
@@ -548,6 +671,10 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 </Button>
                 <Button onClick={() => {
                   handleAddItem(detailViewItem, detailQuantity);
+                  // Also update the addedItems state to show tick in specials modal
+                  if (detailViewItem) {
+                    setAddedItems(prev => new Set(prev).add(detailViewItem.id));
+                  }
                 }}>
                   Add to List
                 </Button>
