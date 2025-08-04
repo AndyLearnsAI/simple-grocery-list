@@ -58,7 +58,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const ITEMS_PER_PAGE = isMobile ? 8 : 9;
+  const ITEMS_PER_PAGE = 9;
 
   useEffect(() => {
     if (isOpen) {
@@ -187,7 +187,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-                 <DialogContent className="w-full max-w-md sm:max-w-lg h-[85vh] max-h-[700px] flex flex-col p-4 sm:p-6">
+                 <DialogContent className="w-full max-w-md sm:max-w-lg h-[90vh] max-h-[750px] flex flex-col p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle>Specials</DialogTitle>
           </DialogHeader>
@@ -205,33 +205,33 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                                             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-4 h-full min-h-0">
+                                             <div className="grid grid-cols-3 gap-1 p-2 h-full min-h-0">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                                                         className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative h-full min-h-0"
                             onClick={() => handleItemClick(item)}
                           >
-                                                         <CardContent className="p-2 flex flex-col flex-1 w-full min-h-0">
-                               <div className="flex-1 w-full overflow-hidden flex justify-center items-center aspect-square">
-                                 <img
-                                   src={item.img || '/placeholder.svg'}
-                                   alt={item.item}
-                                   className="w-full h-full object-contain"
-                                   onError={(e) => {
-                                     e.currentTarget.src = '/placeholder.svg';
-                                   }}
-                                 />
-                               </div>
-                              <p className="text-xs font-medium leading-tight line-clamp-2 mt-1 flex-shrink-0">
-                                {item.item}
-                              </p>
+                            <CardContent className="p-1 flex flex-col flex-1 w-full min-h-0">
+                                <div className="relative flex-1 w-full overflow-hidden flex justify-center items-center aspect-square">
+                                    <img
+                                        src={item.img || '/placeholder.svg'}
+                                        alt={item.item}
+                                        className="w-full h-full object-contain"
+                                        onError={(e) => {
+                                            e.currentTarget.src = '/placeholder.svg';
+                                        }}
+                                    />
+                                    <p className="absolute bottom-0 left-0 right-0 bg-black bg-opacity-70 text-white text-[10px] font-medium leading-tight p-1 text-center line-clamp-2">
+                                        {item.item}
+                                    </p>
+                                </div>
                             </CardContent>
                             {item.price && (
-                              <div className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs p-1 rounded">
-                                {item.price}
-                                {item.discount && ` (${item.discount})`}
-                              </div>
+                                <div className="absolute top-1 right-1 bg-black bg-opacity-50 text-white text-[10px] p-1 rounded">
+                                    {item.price}
+                                    {item.discount && ` (${item.discount})`}
+                                </div>
                             )}
                           </Card>
                         ))}
@@ -242,12 +242,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded }: SpecialsModalPr
                 <CarouselPrevious className="absolute left-[-8px] top-1/2 -translate-y-1/2" />
                 <CarouselNext className="absolute right-[-8px] top-1/2 -translate-y-1/2" />
               </div>
-              <div className="text-center text-sm text-muted-foreground pt-2">
+              <div className="text-center text-sm text-muted-foreground pt-1">
                 Page {currentPage} of {totalPages}
               </div>
             </Carousel>
           )}
-          <DialogFooter className="mt-4">
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={onClose} className="w-full">
               Close
             </Button>
