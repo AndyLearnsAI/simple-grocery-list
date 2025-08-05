@@ -254,92 +254,72 @@ function TouchSortableSavedlistItem({
         transition: isDragging ? 'none' : 'none',
       }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1">
-          {/* Drag Handle */}
-          <div
-            ref={dragRef}
-            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
-              isEditing ? 'opacity-50 pointer-events-none' : ''
-            }`}
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            style={{ touchAction: 'none' }}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
-          
-          {item.img && (
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-              <img
-                src={item.img}
-                alt={item.Item}
-                className="w-full h-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
-              />
+      <div className="space-y-3">
+        {/* Main Row: Drag Handle, Image, Item Name, Edit Button, Trash Button */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 flex-1">
+            {/* Drag Handle */}
+            <div
+              ref={dragRef}
+              className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+                isEditing ? 'opacity-50 pointer-events-none' : ''
+              }`}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              style={{ touchAction: 'none' }}
+            >
+              <GripVertical className="h-4 w-4 text-muted-foreground" />
             </div>
-          )}
-          
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <div className="space-y-1">
-                <Input
-                  ref={editInputRef}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleEditSave}
-                  onKeyDown={handleEditKeyDown}
-                  className="h-8 text-sm"
-                  maxLength={99}
+            
+            {item.img && (
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                <img
+                  src={item.img}
+                  alt={item.Item}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.style.display = 'none';
+                  }}
                 />
-                {editError && (
-                  <div className="text-xs text-destructive">{editError}</div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 group">
-                <div className="font-medium text-sm break-words flex-1 text-foreground">
-                  {item.Item}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditStart}
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Edit3 className="h-3 w-3" />
-                </Button>
               </div>
             )}
+            
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <div className="space-y-1">
+                  <Input
+                    ref={editInputRef}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                    onBlur={handleEditSave}
+                    onKeyDown={handleEditKeyDown}
+                    className="h-8 text-sm"
+                    maxLength={99}
+                  />
+                  {editError && (
+                    <div className="text-xs text-destructive">{editError}</div>
+                  )}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group">
+                  <div className="font-medium text-sm break-words flex-1 text-foreground">
+                    {item.Item}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditStart}
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-        
-        <div className={`flex items-center gap-2 ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.selectedQuantity <= 0 || isEditing}
-            className="h-8 w-8 p-0"
-          >
-            <Minus className="h-3 w-3" />
-          </Button>
-          <span className="text-sm font-medium min-w-[2rem] text-center">
-            {item.selectedQuantity}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, 1)}
-            disabled={isEditing}
-            className="h-8 w-8 p-0"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
+          
           <Button
             variant="ghost"
             size="sm"
@@ -350,6 +330,32 @@ function TouchSortableSavedlistItem({
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
+        
+        {/* Second Row: Quantity Controls (only show if not editing) */}
+        {!isEditing && (
+          <div className="flex items-center justify-center gap-3">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, -1)}
+              disabled={item.selectedQuantity <= 0}
+              className="h-8 w-8 p-0"
+            >
+              <Minus className="h-3 w-3" />
+            </Button>
+            <span className="text-sm font-medium min-w-[2rem] text-center">
+              {item.selectedQuantity}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onUpdateQuantity(item.id, 1)}
+              className="h-8 w-8 p-0"
+            >
+              <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
       </div>
     </Card>
   );
