@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
@@ -1218,6 +1219,140 @@ export function GroceryChecklist() {
     fetchItems();
   };
 
+  const sortItems = async (sortType: 'newest' | 'oldest' | 'az' | 'za') => {
+    console.log('🔍 Starting sort operation:', sortType);
+    
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        console.log('❌ No authenticated user found');
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to sort items",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log('✅ User authenticated:', user.data.user.id);
+
+      // Get current items with the specified sort order
+      let sortQuery = supabase
+        .from('Grocery list')
+        .select('*')
+        .eq('user_id', user.data.user.id);
+
+      console.log('🔍 Building sort query for type:', sortType);
+
+      switch (sortType) {
+        case 'newest':
+          sortQuery = sortQuery.order('created_at', { ascending: false });
+          break;
+        case 'oldest':
+          sortQuery = sortQuery.order('created_at', { ascending: true });
+          break;
+        case 'az':
+          sortQuery = sortQuery.order('Item', { ascending: true });
+          break;
+        case 'za':
+          sortQuery = sortQuery.order('Item', { ascending: false });
+          break;
+      }
+
+      console.log('🔍 Executing sort query...');
+      const { data: sortedItems, error } = await sortQuery;
+
+      if (error) {
+        console.error('❌ Sort query error:', error);
+        throw error;
+      }
+
+      console.log('✅ Sort query successful, items found:', sortedItems?.length || 0);
+      console.log('📋 Sorted items:', sortedItems?.map(item => ({ id: item.id, Item: item.Item, order: item.order })));
+
+      if (!sortedItems || sortedItems.length === 0) {
+        console.log('⚠️ No items to sort');
+        toast({
+          title: "No items to sort",
+          description: "Your grocery list is empty",
+        });
+        return;
+      }
+
+                   console.log('🔄 Updating order column for', sortedItems.length, 'items...');
+
+             // Step 1: Set all items to temporary negative order values to avoid conflicts
+             console.log('🔄 Step 1: Setting temporary negative order values...');
+             for (let i = 0; i < sortedItems.length; i++) {
+               const item = sortedItems[i];
+               const tempOrder = -(i + 1);
+               console.log(`📝 Setting item ${item.id} (${item.Item}) to temporary order ${tempOrder}`);
+               
+               const { error: tempUpdateError } = await supabase
+                 .from('Grocery list')
+                 .update({ order: tempOrder })
+                 .eq('id', item.id)
+                 .eq('user_id', user.data.user.id);
+               
+               if (tempUpdateError) {
+                 console.error('❌ Temporary update error for item', item.id, ':', tempUpdateError);
+                 throw tempUpdateError;
+               }
+               
+               console.log(`✅ Set item ${item.id} to temporary order ${tempOrder}`);
+             }
+
+             // Step 2: Set all items to their final positive order values
+             console.log('🔄 Step 2: Setting final positive order values...');
+             for (let i = 0; i < sortedItems.length; i++) {
+               const item = sortedItems[i];
+               const finalOrder = i + 1;
+               console.log(`📝 Setting item ${item.id} (${item.Item}) to final order ${finalOrder}`);
+               
+               const { error: finalUpdateError } = await supabase
+                 .from('Grocery list')
+                 .update({ order: finalOrder })
+                 .eq('id', item.id)
+                 .eq('user_id', user.data.user.id);
+               
+               if (finalUpdateError) {
+                 console.error('❌ Final update error for item', item.id, ':', finalUpdateError);
+                 throw finalUpdateError;
+               }
+               
+               console.log(`✅ Set item ${item.id} to final order ${finalOrder}`);
+             }
+
+             console.log('✅ All order updates completed');
+
+      // Refresh the items list to show the new order
+      console.log('🔄 Refreshing items list...');
+      await fetchItems();
+      console.log('✅ Items list refreshed');
+
+      const sortLabels = {
+        newest: 'newest first',
+        oldest: 'oldest first',
+        az: 'A-Z',
+        za: 'Z-A'
+      };
+
+      console.log('✅ Sort operation completed successfully');
+      toast({
+        title: "Items sorted!",
+        description: `Grocery list sorted by ${sortLabels[sortType]}`,
+      });
+
+    } catch (error) {
+      console.error('❌ Error in sortItems function:', error);
+      toast({
+        title: "Error sorting items",
+        description: "Failed to sort grocery list",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -1245,6 +1380,32 @@ export function GroceryChecklist() {
             <Button onClick={addItem} size="sm">
               <Plus className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Sort Button */}
+          <div className="flex justify-end">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ArrowUpDown className="h-4 w-4" />
+                  Sort
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => sortItems('newest')}>
+                  Sort by newest
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('oldest')}>
+                  Sort by oldest
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('az')}>
+                  Sort A-Z
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('za')}>
+                  Sort Z-A
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {/* Grocery List Items */}
