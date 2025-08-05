@@ -278,6 +278,7 @@ export function GroceryChecklist() {
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const [dragDestination, setDragDestination] = useState<number | null>(null);
+  const [isSorting, setIsSorting] = useState(false);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -388,9 +389,10 @@ export function GroceryChecklist() {
 
       // First, set all items to temporary negative order values to avoid conflicts
       for (const item of itemsToUpdate) {
+        const tempOrder = -(10000 + item.order); // Use a large negative range to avoid conflicts
         const { error } = await supabase
           .from('Grocery list')
-          .update({ order: -item.order }) // Use negative values as temporary
+          .update({ order: tempOrder })
           .eq('id', item.id)
           .eq('user_id', user.data.user.id);
 
@@ -1221,6 +1223,7 @@ export function GroceryChecklist() {
 
   const sortItems = async (sortType: 'newest' | 'oldest' | 'az' | 'za') => {
     console.log('🔍 Starting sort operation:', sortType);
+    setIsSorting(true);
     
     try {
       const user = await supabase.auth.getUser();
@@ -1285,7 +1288,7 @@ export function GroceryChecklist() {
              console.log('🔄 Step 1: Setting temporary negative order values...');
              for (let i = 0; i < sortedItems.length; i++) {
                const item = sortedItems[i];
-               const tempOrder = -(i + 1);
+               const tempOrder = -(10000 + i); // Use a large negative range to avoid conflicts
                console.log(`📝 Setting item ${item.id} (${item.Item}) to temporary order ${tempOrder}`);
                
                const { error: tempUpdateError } = await supabase
@@ -1350,6 +1353,8 @@ export function GroceryChecklist() {
         description: "Failed to sort grocery list",
         variant: "destructive",
       });
+    } finally {
+      setIsSorting(false);
     }
   };
 
@@ -1409,7 +1414,7 @@ export function GroceryChecklist() {
           </div>
 
           {/* Grocery List Items */}
-          <div className="space-y-2">
+          <div className={`space-y-2 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
             {items.map((item, index) => (
               <TouchSortableGroceryItem
                 key={item.id}
