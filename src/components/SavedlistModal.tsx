@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
-import { Package, Plus, Minus, X, Edit3, Trash2, Save } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -13,6 +14,7 @@ interface SavedlistItem {
   Quantity: number;
   user_id?: string;
   img?: string;
+  order: number;
 }
 
 interface SelectedSavedlistItem extends SavedlistItem {
@@ -25,12 +27,341 @@ interface SavedlistModalProps {
   onItemsAdded: (data: { items: { item: string; quantity: number }[]; addedItemIds: number[] }) => void;
 }
 
+// Touch-optimized Drag and Drop Item Component for Savedlist
+function TouchSortableSavedlistItem({ 
+  item, 
+  onUpdateQuantity, 
+  onRemove, 
+  onReorder,
+  onUpdateItemName,
+  index,
+  totalItems,
+  dragDestination,
+  onDragDestinationChange
+}: {
+  item: SelectedSavedlistItem;
+  onUpdateQuantity: (id: number, change: number) => void;
+  onRemove: (id: number) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
+  onUpdateItemName: (id: number, newName: string) => Promise<boolean>;
+  index: number;
+  totalItems: number;
+  dragDestination: number | null;
+  onDragDestinationChange: (destination: number | null) => void;
+}) {
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [currentY, setCurrentY] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(item.Item);
+  const [editError, setEditError] = useState("");
+  const itemRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Validation function
+  const validateItemName = (name: string): string => {
+    if (!name.trim()) {
+      return "Item name cannot be empty";
+    }
+    if (name.length > 99) {
+      return "Item name cannot exceed 99 characters";
+    }
+    // Check for special characters and emojis
+    const specialCharRegex = /[^\w\s\-]/;
+    if (specialCharRegex.test(name)) {
+      return "Item name cannot contain special characters";
+    }
+    // Check for emojis
+    const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+    if (emojiRegex.test(name)) {
+      return "Item name cannot contain emojis";
+    }
+    return "";
+  };
+
+  const handleEditStart = () => {
+    setIsEditing(true);
+    setEditValue(item.Item);
+    setEditError("");
+    // Focus the input after a brief delay to ensure it's rendered
+    setTimeout(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }, 0);
+  };
+
+  const handleEditSave = async () => {
+    const trimmedValue = editValue.trim();
+    const error = validateItemName(trimmedValue);
+    
+    if (error) {
+      setEditError(error);
+      return;
+    }
+
+    if (trimmedValue === item.Item) {
+      setIsEditing(false);
+      return;
+    }
+
+    const success = await onUpdateItemName(item.id, trimmedValue);
+    if (success) {
+      setIsEditing(false);
+      setEditError("");
+    } else {
+      setEditError("Item name already exists");
+    }
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+    setEditValue(item.Item);
+    setEditError("");
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEditSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleEditCancel();
+    }
+  };
+
+  const calculateDestination = (deltaY: number) => {
+    const itemHeight = itemRef.current?.offsetHeight || 80;
+    const positionsMoved = Math.round(deltaY / itemHeight);
+    return Math.max(0, Math.min(totalItems - 1, index + positionsMoved));
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setDragStartY(touch.clientY);
+    setCurrentY(touch.clientY);
+    setIsDragging(true);
+    setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    // Prevent default only on the drag handle
+    e.stopPropagation();
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - dragStartY;
+    setCurrentY(touch.clientY);
+    setDragOffset(deltaY);
+    
+    // Calculate and update destination
+    const newDestination = calculateDestination(deltaY);
+    onDragDestinationChange(newDestination);
+    
+    // Prevent scrolling only when actually dragging
+    if (Math.abs(deltaY) > 10) {
+      e.preventDefault();
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    
+    const touch = e.changedTouches[0];
+    const deltaY = touch.clientY - dragStartY;
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    // Calculate target position based on drag distance
+    const newIndex = calculateDestination(deltaY);
+    
+    if (newIndex !== index) {
+      onReorder(index, newIndex);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left mouse button
+    
+    setDragStartY(e.clientY);
+    setCurrentY(e.clientY);
+    setIsDragging(true);
+    setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    e.stopPropagation();
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaY = e.clientY - dragStartY;
+    setCurrentY(e.clientY);
+    setDragOffset(deltaY);
+    
+    // Calculate and update destination
+    const newDestination = calculateDestination(deltaY);
+    onDragDestinationChange(newDestination);
+  };
+
+  const handleMouseUp = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaY = e.clientY - dragStartY;
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    // Calculate target position based on drag distance
+    const newIndex = calculateDestination(deltaY);
+    
+    if (newIndex !== index) {
+      onReorder(index, newIndex);
+    }
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, dragStartY]);
+
+  return (
+    <Card 
+      ref={itemRef}
+      className={`p-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
+        isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
+      } ${
+        dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
+      } ${
+        isEditing ? 'bg-green-50 border-green-200' : ''
+      }`}
+      style={{
+        transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
+        zIndex: isDragging ? 1000 : 'auto',
+        transition: isDragging ? 'none' : 'none',
+      }}
+    >
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 flex-1">
+          {/* Drag Handle */}
+          <div
+            ref={dragRef}
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+              isEditing ? 'opacity-50 pointer-events-none' : ''
+            }`}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            style={{ touchAction: 'none' }}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+          
+          {item.img && (
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+              <img
+                src={item.img}
+                alt={item.Item}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+          
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="space-y-1">
+                <Input
+                  ref={editInputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleEditSave}
+                  onKeyDown={handleEditKeyDown}
+                  className="h-8 text-sm"
+                  maxLength={99}
+                />
+                {editError && (
+                  <div className="text-xs text-destructive">{editError}</div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <div className="font-medium text-sm break-words flex-1 text-foreground">
+                  {item.Item}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEditStart}
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Edit3 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className={`flex items-center gap-2 ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdateQuantity(item.id, -1)}
+            disabled={item.selectedQuantity <= 0 || isEditing}
+            className="h-8 w-8 p-0"
+          >
+            <Minus className="h-3 w-3" />
+          </Button>
+          <span className="text-sm font-medium min-w-[2rem] text-center">
+            {item.selectedQuantity}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onUpdateQuantity(item.id, 1)}
+            disabled={isEditing}
+            className="h-8 w-8 p-0"
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onRemove(item.id)}
+            disabled={isEditing}
+            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModalProps) {
   const [savedlistItems, setSavedlistItems] = useState<SelectedSavedlistItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isEditMode, setIsEditMode] = useState(false);
   const [newItem, setNewItem] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [dragDestination, setDragDestination] = useState<number | null>(null);
+  const [isSorting, setIsSorting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -44,7 +375,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       const { data, error } = await supabase
         .from('SavedlistItems')
         .select('*')
-        .order('Item', { ascending: true });
+        .order('order', { ascending: true });
 
       if (error) throw error;
 
@@ -66,21 +397,270 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
     }
   };
 
+  // Filter items based on search term
+  const filteredItems = savedlistItems.filter(item =>
+    item.Item.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Touch-optimized reordering function
+  const reorderItems = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
+
+    try {
+      const newItems = [...savedlistItems];
+      const [movedItem] = newItems.splice(fromIndex, 1);
+      newItems.splice(toIndex, 0, movedItem);
+      
+      // Update order values
+      const updatedItems = newItems.map((item, index) => ({
+        ...item,
+        order: index + 1
+      }));
+
+      setSavedlistItems(updatedItems);
+      await updateItemsOrder(updatedItems);
+    } catch (error) {
+      console.error('Error reordering items:', error);
+      toast({
+        title: "Error reordering",
+        description: "Failed to reorder items",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const updateItemsOrder = async (updatedItems: SelectedSavedlistItem[]) => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        console.error('No authenticated user found');
+        return;
+      }
+
+      // Get current order values from database to compare
+      const { data: currentItems, error: fetchError } = await supabase
+        .from('SavedlistItems')
+        .select('id, order')
+        .eq('user_id', user.data.user.id)
+        .in('id', updatedItems.map(item => item.id));
+
+      if (fetchError) {
+        console.error('Error fetching current order values:', fetchError);
+        throw fetchError;
+      }
+
+      // Create a map of current order values
+      const currentOrderMap = new Map(currentItems?.map(item => [item.id, item.order]) || []);
+
+      // Filter items that actually need their order updated
+      const itemsToUpdate = updatedItems.filter(item => {
+        const currentOrder = currentOrderMap.get(item.id);
+        return currentOrder !== item.order;
+      });
+
+      if (itemsToUpdate.length === 0) {
+        return;
+      }
+
+             // First, set all items to temporary negative order values to avoid conflicts
+       // Use a much larger negative range to ensure no conflicts
+       for (const item of itemsToUpdate) {
+         const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
+         const { error } = await supabase
+           .from('SavedlistItems')
+           .update({ order: tempOrder })
+           .eq('id', item.id)
+           .eq('user_id', user.data.user.id);
+
+         if (error) {
+           console.error('Error setting temporary order for item:', item.id, error);
+           throw error;
+         }
+       }
+
+      // Then, set all items to their final positive order values
+      for (const item of itemsToUpdate) {
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .update({ order: item.order })
+          .eq('id', item.id)
+          .eq('user_id', user.data.user.id);
+
+        if (error) {
+          console.error('Error setting final order for item:', item.id, error);
+          throw error;
+        }
+      }
+    } catch (error) {
+      console.error('Error updating item order:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save new item order",
+        variant: "destructive",
+      });
+      // Refresh items to revert to original order
+      fetchSavedlistItems();
+    }
+  };
+
   const updateQuantity = (id: number, change: number) => {
     setSavedlistItems(prev => prev.map(item => {
       if (item.id === id) {
-        if (isEditMode) {
-          // In edit mode, update the actual quantity with minimum of 1
-          const newQuantity = Math.max(1, item.Quantity + change);
-          return { ...item, Quantity: newQuantity };
-        } else {
-          // In add mode, update selected quantity with minimum of 0
-          const newQuantity = Math.max(0, item.selectedQuantity + change);
-          return { ...item, selectedQuantity: newQuantity };
-        }
+        const newQuantity = Math.max(0, item.selectedQuantity + change);
+        return { ...item, selectedQuantity: newQuantity };
       }
       return item;
     }));
+  };
+
+  const updateItemName = async (id: number, newName: string): Promise<boolean> => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to edit items",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Check for duplicate names (case-insensitive)
+      const existingItem = savedlistItems.find(item => 
+        item.id !== id && 
+        item.Item.toLowerCase().trim() === newName.toLowerCase().trim()
+      );
+
+      if (existingItem) {
+        toast({
+          title: "Duplicate item name",
+          description: "An item with this name already exists",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('SavedlistItems')
+        .update({ Item: newName })
+        .eq('id', id)
+        .eq('user_id', user.data.user.id);
+
+      if (error) throw error;
+
+      setSavedlistItems(prev => prev.map(i => 
+        i.id === id ? { ...i, Item: newName } : i
+      ));
+
+      toast({
+        title: "Item updated",
+        description: "Item name has been updated",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating item name:', error);
+      toast({
+        title: "Error updating item",
+        description: "Failed to update item name",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
+  const addItem = async () => {
+    if (!newItem.trim()) return;
+
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      // Check for existing item (case-insensitive)
+      const existingItem = savedlistItems.find(item =>
+        item.Item.toLowerCase().trim() === newItem.toLowerCase().trim()
+      );
+
+      if (existingItem) {
+        toast({
+          title: "Item already exists",
+          description: "This item is already in your saved list",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Get the highest order value to place new item at the end
+      const { data: maxOrderData, error: maxOrderError } = await supabase
+        .from('SavedlistItems')
+        .select('order')
+        .eq('user_id', user.data.user.id)
+        .order('order', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (maxOrderError && maxOrderError.code !== 'PGRST116') {
+        throw maxOrderError;
+      }
+
+      const newOrder = (maxOrderData?.order || 0) + 1;
+
+      const { data, error } = await supabase
+        .from('SavedlistItems')
+        .insert([
+          {
+            Item: newItem.trim(),
+            Quantity: 1,
+            user_id: user.data.user.id,
+            order: newOrder
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      const newItemWithSelection = {
+        ...data,
+        selectedQuantity: data.Quantity || 1
+      };
+
+      setSavedlistItems(prev => [...prev, newItemWithSelection]);
+      setNewItem("");
+      toast({
+        title: "Item added",
+        description: "Item added to saved list",
+      });
+    } catch (error) {
+      toast({
+        title: "Error adding item",
+        description: "Failed to add item to saved list",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const removeItem = async (id: number) => {
+    try {
+      const { error } = await supabase
+        .from('SavedlistItems')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setSavedlistItems(prev => prev.filter(item => item.id !== id));
+      toast({
+        title: "Item removed",
+        description: "Item removed from saved list",
+      });
+    } catch (error) {
+      toast({
+        title: "Error removing item",
+        description: "Failed to remove item from saved list",
+        variant: "destructive",
+      });
+    }
   };
 
   const addSelectedItems = async () => {
@@ -148,7 +728,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             .limit(1)
             .single();
 
-          if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          if (maxOrderError && maxOrderError.code !== 'PGRST116') {
             throw maxOrderError;
           }
 
@@ -207,122 +787,114 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
     }
   };
 
-  const removeItem = async (id: number) => {
-    try {
-      const { error } = await supabase
-        .from('SavedlistItems')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      setSavedlistItems(prev => prev.filter(item => item.id !== id));
-      toast({
-        title: "Item removed",
-        description: "Item removed from saved list",
-      });
-    } catch (error) {
-      toast({
-        title: "Error removing item",
-        description: "Failed to remove item from saved list",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const addItem = async () => {
-    if (!newItem.trim()) return;
-
+  const sortItems = async (sortType: 'newest' | 'oldest' | 'az' | 'za') => {
+    setIsSorting(true);
+    
     try {
       const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
-
-      // Check for existing item (case-insensitive)
-      const existingItem = savedlistItems.find(item =>
-        item.Item.toLowerCase().trim() === newItem.toLowerCase().trim()
-      );
-
-      if (existingItem) {
+      if (!user.data.user) {
         toast({
-          title: "Item already exists",
-          description: "This item is already in your saved list",
+          title: "Authentication Error",
+          description: "Please sign in to sort items",
           variant: "destructive",
         });
         return;
       }
 
-      const { data, error } = await supabase
+      // Get current items with the specified sort order
+      let sortQuery = supabase
         .from('SavedlistItems')
-        .insert([
-          {
-            Item: newItem.trim(),
-            Quantity: 1,
-            user_id: user.data.user.id
-          }
-        ])
-        .select()
-        .single();
+        .select('*')
+        .eq('user_id', user.data.user.id);
 
-      if (error) throw error;
+      switch (sortType) {
+        case 'newest':
+          sortQuery = sortQuery.order('created_at', { ascending: false });
+          break;
+        case 'oldest':
+          sortQuery = sortQuery.order('created_at', { ascending: true });
+          break;
+        case 'az':
+          sortQuery = sortQuery.order('Item', { ascending: true });
+          break;
+        case 'za':
+          sortQuery = sortQuery.order('Item', { ascending: false });
+          break;
+      }
 
-      const newItemWithSelection = {
-        ...data,
-        selectedQuantity: data.Quantity || 1
+      const { data: sortedItems, error } = await sortQuery;
+
+      if (error) {
+        throw error;
+      }
+
+      if (!sortedItems || sortedItems.length === 0) {
+        toast({
+          title: "No items to sort",
+          description: "Your saved list is empty",
+        });
+        return;
+      }
+
+             // Update order values
+       for (let i = 0; i < sortedItems.length; i++) {
+         const item = sortedItems[i];
+         const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
+         const { error: tempUpdateError } = await supabase
+           .from('SavedlistItems')
+           .update({ order: tempOrder })
+           .eq('id', item.id)
+           .eq('user_id', user.data.user.id);
+
+         if (tempUpdateError) {
+           throw tempUpdateError;
+         }
+       }
+
+      for (let i = 0; i < sortedItems.length; i++) {
+        const item = sortedItems[i];
+        const finalOrder = i + 1;
+        const { error: finalUpdateError } = await supabase
+          .from('SavedlistItems')
+          .update({ order: finalOrder })
+          .eq('id', item.id)
+          .eq('user_id', user.data.user.id);
+
+        if (finalUpdateError) {
+          throw finalUpdateError;
+        }
+      }
+
+      // Refresh the items list to show the new order
+      await fetchSavedlistItems();
+
+      const sortLabels = {
+        newest: 'newest first',
+        oldest: 'oldest first',
+        az: 'A-Z',
+        za: 'Z-A'
       };
 
-      setSavedlistItems(prev => [...prev, newItemWithSelection].sort((a, b) => a.Item.localeCompare(b.Item)));
-      setNewItem("");
       toast({
-        title: "Item added",
-        description: "Item added to saved list",
+        title: "Items sorted!",
+        description: `Saved list sorted by ${sortLabels[sortType]}`,
       });
-    } catch (error) {
-      toast({
-        title: "Error adding item",
-        description: "Failed to add item to saved list",
-        variant: "destructive",
-      });
-    }
-  };
 
-  const saveChanges = async () => {
-    setSaving(true);
-    try {
-      const updatePromises = savedlistItems.map(item =>
-        supabase
-          .from('SavedlistItems')
-          .update({ Quantity: item.Quantity })
-          .eq('id', item.id)
-      );
-
-      await Promise.all(updatePromises);
-      
-      toast({
-        title: "Changes saved",
-        description: "All changes have been saved",
-      });
-      
-      setIsEditMode(false);
-      
-      // Reset selectedQuantity to match updated Quantity for add mode
-      setSavedlistItems(prev => prev.map(item => ({
-        ...item,
-        selectedQuantity: 0
-      })));
     } catch (error) {
+      console.error('Error in sortItems function:', error);
       toast({
-        title: "Error saving changes",
-        description: "Failed to save changes",
+        title: "Error sorting items",
+        description: "Failed to sort saved list",
         variant: "destructive",
       });
     } finally {
-      setSaving(false);
+      setIsSorting(false);
     }
   };
 
   const handleClose = () => {
-    setIsEditMode(false);
     setNewItem("");
+    setSearchTerm("");
     setSavedlistItems(prev => prev.map(item => ({ ...item, selectedQuantity: 0 })));
     onClose();
   };
@@ -334,7 +906,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       <Dialog open={isOpen} onOpenChange={handleClose}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>{isEditMode ? "Edit Saved Items" : "Add Saved Items"}</DialogTitle>
+            <DialogTitle>Add Saved Items</DialogTitle>
           </DialogHeader>
           <div className="text-center py-8">
             <div className="text-muted-foreground">Loading saved list items...</div>
@@ -348,140 +920,116 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh]">
         <DialogHeader>
-          <div className="flex items-center justify-between">
-            <DialogTitle>{isEditMode ? "Edit Saved Items" : "Add Saved Items"}</DialogTitle>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsEditMode(!isEditMode)}
-              className={`h-8 w-8 p-0 flex-shrink-0 ${
-                isEditMode 
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
-                  : ''
-              }`}
-            >
-              <Edit3 className="h-4 w-4" />
-            </Button>
-          </div>
+          <DialogTitle>Add Saved Items</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4">
-          {/* Add new item input (only shown in edit mode) */}
-          {isEditMode && (
-            <div className="flex gap-2">
-              <Input
-                placeholder="Add new item..."
-                value={newItem}
-                onChange={(e) => setNewItem(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && addItem()}
-                className="flex-1 min-w-0"
-              />
-              <Button onClick={addItem} size="sm" className="flex-shrink-0">
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
+          {/* Add new item input */}
+          <div className="flex gap-2">
+            <Input
+              placeholder="Add new item..."
+              value={newItem}
+              onChange={(e) => setNewItem(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && addItem()}
+              className="flex-1"
+            />
+            <Button onClick={addItem} size="sm">
+              <Plus className="h-4 w-4" />
+            </Button>
+          </div>
 
-          {savedlistItems.length > 0 ? (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {savedlistItems.map((item) => (
-                <Card key={item.id} className="p-3 shadow-card">
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* Image container */}
-                    {item.img && (
-                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                        <img
-                          src={item.img}
-                          alt={item.Item}
-                          className="w-full h-full object-contain"
-                          onError={(e) => {
-                            e.currentTarget.style.display = 'none';
-                          }}
-                        />
-                      </div>
-                    )}
-                    
-                    {/* Item name - flexible width with proper text wrapping */}
-                    <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm text-foreground break-words">
-                        {item.Item}
-                      </div>
-                    </div>
-                    
-                    {/* Quantity controls - fixed width */}
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateQuantity(item.id, -1)}
-                        disabled={isEditMode ? item.Quantity <= 1 : item.selectedQuantity <= 0}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="text-sm font-medium min-w-[2rem] text-center">
-                        {isEditMode ? item.Quantity : item.selectedQuantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => updateQuantity(item.id, 1)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      {isEditMode && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeItem(item.id)}
-                          className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </Card>
-              ))}
+          {/* Search Bar and Sort Button */}
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search items..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
             </div>
-          ) : savedlistItems.length === 0 ? (
-            <div className="text-center py-8">
-              <div className="text-muted-foreground">
-                {isEditMode 
-                  ? "No saved list items yet. Add some items to get started!"
-                  : "No saved list items yet. Use the edit button to add some!"
-                }
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <ArrowUpDown className="h-4 w-4" />
+                  Sort
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => sortItems('newest')}>
+                  Sort by newest
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('oldest')}>
+                  Sort by oldest
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('az')}>
+                  Sort A-Z
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => sortItems('za')}>
+                  Sort Z-A
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Saved List Items */}
+          <div className={`space-y-2 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            {filteredItems.map((item, index) => (
+              <TouchSortableSavedlistItem
+                key={item.id}
+                item={item}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeItem}
+                onReorder={reorderItems}
+                onUpdateItemName={updateItemName}
+                index={index}
+                totalItems={filteredItems.length}
+                dragDestination={dragDestination}
+                onDragDestinationChange={(destination) => {
+                  setDragDestination(destination);
+                }}
+              />
+            ))}
+
+            {/* Empty State */}
+            {filteredItems.length === 0 && (
+              <div className="p-6 text-center">
+                <div className="text-muted-foreground">
+                  {searchTerm 
+                    ? `No items found matching "${searchTerm}". Try a different search term.`
+                    : "No saved list items yet. Add some items to get started!"
+                  }
+                </div>
               </div>
-            </div>
-          ) : null}
+            )}
+          </div>
 
           <div className="flex gap-2 pt-4 border-t">
-            {isEditMode ? (
-              <Button
-                onClick={() => setIsEditMode(false)}
-                className="flex-1"
-              >
-                Close
-              </Button>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={handleClose}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  onClick={addSelectedItems}
-                  disabled={selectedCount === 0}
-                  className="flex-1"
-                >
-                  Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
-                </Button>
-              </>
-            )}
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={addSelectedItems}
+              disabled={selectedCount === 0}
+              className="flex-1"
+            >
+              Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
+            </Button>
           </div>
         </div>
       </DialogContent>

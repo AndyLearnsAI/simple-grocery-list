@@ -502,8 +502,9 @@ export function GroceryChecklist() {
       console.log('Items that need order updates:', itemsToUpdate.map(item => ({ id: item.id, newOrder: item.order })));
 
       // First, set all items to temporary negative order values to avoid conflicts
+      // Use a much larger negative range to ensure no conflicts
       for (const item of itemsToUpdate) {
-        const tempOrder = -(10000 + item.order); // Use a large negative range to avoid conflicts
+        const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
         const { error } = await supabase
           .from('Grocery list')
           .update({ order: tempOrder })
@@ -1458,7 +1459,7 @@ export function GroceryChecklist() {
              console.log('🔄 Step 1: Setting temporary negative order values...');
              for (let i = 0; i < sortedItems.length; i++) {
                const item = sortedItems[i];
-               const tempOrder = -(10000 + i); // Use a large negative range to avoid conflicts
+               const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
                console.log(`📝 Setting item ${item.id} (${item.Item}) to temporary order ${tempOrder}`);
                
                const { error: tempUpdateError } = await supabase
