@@ -11,6 +11,7 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
+import { parseSmartSyntax } from "@/lib/utils";
 
 interface GroceryItem {
   id: number;
@@ -332,14 +333,14 @@ function TouchSortableGroceryItem({
           {isQuantityEditing ? (
             <div className="relative">
               {/* Cross layout for quantity editing */}
-              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20">
+              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20 items-center justify-center">
                 {/* Top row */}
                 <div></div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuantityChange(1)}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Plus className="h-3 w-3" />
                 </Button>
@@ -350,7 +351,7 @@ function TouchSortableGroceryItem({
                   variant="ghost"
                   size="sm"
                   onClick={() => onRemove(item.id)}
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive flex items-center justify-center"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -359,7 +360,7 @@ function TouchSortableGroceryItem({
                   type="number"
                   value={editQuantity}
                   onChange={handleQuantityInputChange}
-                  className="h-6 w-12 text-xs text-center appearance-none"
+                  className="h-6 w-12 text-xs text-center appearance-none flex items-center justify-center"
                   min="1"
                   max="99"
                   style={{ MozAppearance: 'textfield' }}
@@ -368,7 +369,7 @@ function TouchSortableGroceryItem({
                   variant="ghost"
                   size="sm"
                   onClick={handleQuantityEditToggle}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Check className="h-3 w-3 text-green-600" />
                 </Button>
@@ -380,7 +381,7 @@ function TouchSortableGroceryItem({
                   size="sm"
                   onClick={() => handleQuantityChange(-1)}
                   disabled={editQuantity <= 1}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Minus className="h-3 w-3" />
                 </Button>
@@ -602,15 +603,19 @@ export function GroceryChecklist() {
 
   const addItem = async () => {
     if (!newItem.trim()) return;
+    
+    // Parse smart syntax
+    const { itemName, quantity, notes } = parseSmartSyntax(newItem);
+    
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
-      const normalizedNewItem = normalizeItemName(newItem);
+      const normalizedNewItem = normalizeItemName(itemName);
       const existingItem = items.find(item => 
         normalizeItemName(item.Item) === normalizedNewItem
       );
       if (existingItem) {
-        const newQuantity = (existingItem.Quantity || 0) + 1;
+        const newQuantity = (existingItem.Quantity || 0) + quantity;
         const { error: updateError } = await supabase
           .from('Grocery list')
           .update({ Quantity: newQuantity })
@@ -635,8 +640,9 @@ export function GroceryChecklist() {
         const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
-            Item: newItem.trim(),
-            Quantity: 1,
+            Item: itemName,
+            Quantity: quantity,
+            notes: notes,
             user_id: user.id,
             order: newOrder
           }])
@@ -649,9 +655,19 @@ export function GroceryChecklist() {
         }
       }
       setNewItem("");
+      
+      // Show appropriate toast message based on parsing
+      let description = `${itemName} added to grocery list`;
+      if (quantity > 1) {
+        description = `${itemName} (x${quantity}) added to grocery list`;
+      }
+      if (notes) {
+        description += ` with note: "${notes}"`;
+      }
+      
       toast({
         title: "Item added!",
-        description: `${newItem.trim()} added to grocery list`,
+        description: description,
       });
     } catch (error) {
       let errorMessage = "Failed to add item to grocery list";
@@ -1146,7 +1162,7 @@ export function GroceryChecklist() {
         <div className="space-y-4">
           <div className="flex gap-2">
             <Input
-              placeholder="Add a new item..."
+                              placeholder="Add a new item... try x2 for qty and brackets for (notes)"
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && addItem()}

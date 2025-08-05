@@ -8,6 +8,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemDetailModal } from "./ItemDetailModal";
+import { parseSmartSyntax } from "@/lib/utils";
 
 interface SavedlistItem {
   id: number;
@@ -362,14 +363,14 @@ function TouchSortableSavedlistItem({
           {isQuantityEditing ? (
             <div className="relative">
               {/* Cross layout for quantity editing */}
-              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20">
+              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20 items-center justify-center">
                 {/* Top row */}
                 <div></div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => handleQuantityChange(1)}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Plus className="h-3 w-3" />
                 </Button>
@@ -380,7 +381,7 @@ function TouchSortableSavedlistItem({
                   variant="ghost"
                   size="sm"
                   onClick={() => onRemove(item.id)}
-                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive flex items-center justify-center"
                 >
                   <Trash2 className="h-3 w-3" />
                 </Button>
@@ -389,7 +390,7 @@ function TouchSortableSavedlistItem({
                   type="number"
                   value={editQuantity}
                   onChange={handleQuantityInputChange}
-                  className="h-6 w-12 text-xs text-center appearance-none"
+                  className="h-6 w-12 text-xs text-center appearance-none flex items-center justify-center"
                   min="1"
                   max="99"
                   style={{ MozAppearance: 'textfield' }}
@@ -398,7 +399,7 @@ function TouchSortableSavedlistItem({
                   variant="ghost"
                   size="sm"
                   onClick={handleQuantityEditToggle}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Check className="h-3 w-3 text-green-600" />
                 </Button>
@@ -410,7 +411,7 @@ function TouchSortableSavedlistItem({
                   size="sm"
                   onClick={() => handleQuantityChange(-1)}
                   disabled={editQuantity <= 1}
-                  className="h-6 w-6 p-0"
+                  className="h-6 w-6 p-0 flex items-center justify-center"
                 >
                   <Minus className="h-3 w-3" />
                 </Button>
@@ -617,13 +618,16 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const addItem = async () => {
     if (!newItem.trim()) return;
 
+    // Parse smart syntax
+    const { itemName, quantity, notes } = parseSmartSyntax(newItem);
+
     try {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
 
       // Check for existing item (case-insensitive)
       const existingItem = savedlistItems.find(item =>
-        item.Item.toLowerCase().trim() === newItem.toLowerCase().trim()
+        item.Item.toLowerCase().trim() === itemName.toLowerCase().trim()
       );
 
       if (existingItem) {
@@ -655,8 +659,9 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
         .from('SavedlistItems')
         .insert([
           {
-            Item: newItem.trim(),
-            Quantity: 1,
+            Item: itemName,
+            Quantity: quantity,
+            notes: notes,
             user_id: user.data.user.id,
             order: newOrder
           }
@@ -673,9 +678,19 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       setSavedlistItems(prev => [newItemWithSelection, ...prev]);
       setNewItem("");
+      
+      // Show appropriate toast message based on parsing
+      let description = `${itemName} added to saved list`;
+      if (quantity > 1) {
+        description = `${itemName} (x${quantity}) added to saved list`;
+      }
+      if (notes) {
+        description += ` with note: "${notes}"`;
+      }
+      
       toast({
         title: "Item added",
-        description: "Item added to saved list",
+        description: description,
       });
     } catch (error) {
       toast({
@@ -974,7 +989,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             {/* Add new item input */}
             <div className="flex gap-2">
               <Input
-                placeholder="Add new item..."
+                placeholder="Add a new item... try x2 for qty and brackets for (notes)"
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
