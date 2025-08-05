@@ -222,9 +222,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         addedItemId = existingItem.id;
       } else {
         wasNew = true;
+        
+        // Get the highest order value to place new item at the end (user-specific)
+        const { data: maxOrderData, error: maxOrderError } = await supabase
+          .from('Grocery list')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw maxOrderError;
+        }
+
+        const newOrder = (maxOrderData?.order || 0) + 1;
+
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img })
+          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img, order: newOrder })
           .select('id')
           .single();
         if (error) throw error;
@@ -380,9 +396,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         addedItemId = existingItem.id;
       } else {
         wasNew = true;
+        
+        // Get the highest order value to place new item at the end (user-specific)
+        const { data: maxOrderData, error: maxOrderError } = await supabase
+          .from('Grocery list')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw maxOrderError;
+        }
+
+        const newOrder = (maxOrderData?.order || 0) + 1;
+
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img })
+          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img, order: newOrder })
           .select('id')
           .single();
         if (error) throw error;

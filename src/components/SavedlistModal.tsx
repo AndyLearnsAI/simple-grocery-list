@@ -139,6 +139,21 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           });
         } else {
           // Add new item to grocery list
+          // Get the highest order value to place new item at the end (user-specific)
+          const { data: maxOrderData, error: maxOrderError } = await supabase
+            .from('Grocery list')
+            .select('order')
+            .eq('user_id', user.data.user.id)
+            .order('order', { ascending: false })
+            .limit(1)
+            .single();
+
+          if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+            throw maxOrderError;
+          }
+
+          const newOrder = (maxOrderData?.order || 0) + 1;
+
           const { data: newItem, error: insertError } = await supabase
             .from('Grocery list')
             .insert([
@@ -146,7 +161,8 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                 Item: selectedItem.Item,
                 Quantity: selectedItem.selectedQuantity,
                 user_id: user.data.user.id,
-                img: selectedItem.img
+                img: selectedItem.img,
+                order: newOrder
               }
             ])
             .select()

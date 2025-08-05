@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Calendar, Package, Undo2, ChevronDown, ChevronRight } from "lucide-react";
+import { Calendar, Package, Undo2, ChevronDown, ChevronRight, Trash2, Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -23,19 +23,25 @@ interface GroupedDate {
   count: number;
 }
 
-interface RestoredItem {
+interface DeletedItem {
   originalItem: PurchaseItem;
-  restoredQuantity: number;
-  restoredAt: number;
-  groceryListId?: number;
-  wasDeleted: boolean; // Whether the item was completely removed from purchase history
+  deletedAt: number;
+}
+
+interface AddedToGroceryItem {
+  originalItem: PurchaseItem;
+  addedAt: number;
+  wasNewItem: boolean;
+  existingItemId?: number;
+  originalQuantity?: number;
 }
 
 export function PurchaseHistory() {
   const [todayGroup, setTodayGroup] = useState<GroupedDate | null>(null);
   const [olderDates, setOlderDates] = useState<GroupedDate[]>([]);
   const [loading, setLoading] = useState(true);
-  const [recentlyRestored, setRecentlyRestored] = useState<RestoredItem | null>(null);
+  const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedItem | null>(null);
+  const [recentlyAddedToGrocery, setRecentlyAddedToGrocery] = useState<AddedToGroceryItem | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -154,12 +160,58 @@ export function PurchaseHistory() {
     }
   };
 
-  const restoreToGroceryList = async (item: PurchaseItem) => {
-    // Process the full quantity directly
-    await processRestore(item, item.Quantity);
+  const deletePurchaseHistory = async (item: PurchaseItem) => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      const { error: deleteError } = await supabase
+        .from('Purchase history')
+        .delete()
+        .eq('id', item.id);
+
+      if (deleteError) throw deleteError;
+
+      // Update local state - remove item from appropriate list
+      setTodayGroup(prev => prev ? { 
+        ...prev, 
+        items: prev.items.filter(i => i.id !== item.id),
+        count: prev.count - 1
+      } : null);
+      setOlderDates(prev => prev.map(dateGroup => ({
+        ...dateGroup,
+        items: dateGroup.items.filter(i => i.id !== item.id)
+      })));
+
+      // Store for undo functionality
+      const deletedItem: DeletedItem = {
+        originalItem: item,
+        deletedAt: Date.now()
+      };
+      setRecentlyDeleted(deletedItem);
+
+      toast({
+        title: "Item deleted",
+        description: `Item "${item.Item}" deleted from purchase history.`,
+        action: (
+          <ToastAction 
+            altText="Undo delete" 
+            onClick={() => undoDelete(deletedItem)}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+    } catch (error) {
+      toast({
+        title: "Error deleting item",
+        description: "Failed to delete item from purchase history",
+        variant: "destructive",
+      });
+    }
   };
 
-  const processRestore = async (item: PurchaseItem, selectedQuantity: number) => {
+  const addToGroceryList = async (item: PurchaseItem) => {
     try {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
@@ -180,10 +232,17 @@ export function PurchaseHistory() {
         normalizeItemName(existingItem.Item) === normalizeItemName(item.Item)
       ) || [];
 
+      let wasNewItem = true;
+      let existingItemId: number | undefined;
+      let originalQuantity: number | undefined;
+
       if (existingItems && existingItems.length > 0) {
         // Update existing item quantity
         const existingItem = existingItems[0];
-        const newQuantity = (existingItem.Quantity || 0) + selectedQuantity;
+        originalQuantity = existingItem.Quantity || 0;
+        const newQuantity = originalQuantity + item.Quantity;
+        existingItemId = existingItem.id;
+        wasNewItem = false;
         
         const { error: updateError } = await supabase
           .from('Grocery list')
@@ -193,81 +252,56 @@ export function PurchaseHistory() {
         if (updateError) throw updateError;
       } else {
         // Add new item to grocery list
-        const { error: groceryError } = await supabase
+        // Get the highest order value to place new item at the end (user-specific)
+        const { data: maxOrderData, error: maxOrderError } = await supabase
+          .from('Grocery list')
+          .select('order')
+          .eq('user_id', user.data.user.id)
+          .order('order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw maxOrderError;
+        }
+
+        const newOrder = (maxOrderData?.order || 0) + 1;
+
+        const { data: newItem, error: groceryError } = await supabase
           .from('Grocery list')
           .insert([
             {
               Item: item.Item,
-              Quantity: selectedQuantity,
+              Quantity: item.Quantity,
               user_id: user.data.user.id,
-              img: item.img
+              img: item.img,
+              order: newOrder
             }
-          ]);
+          ])
+          .select()
+          .single();
 
         if (groceryError) throw groceryError;
-      }
-
-      const remainingQuantity = item.Quantity - selectedQuantity;
-
-      if (remainingQuantity <= 0) {
-        // Remove from purchase history entirely
-        const { error: deleteError } = await supabase
-          .from('Purchase history')
-          .delete()
-          .eq('id', item.id);
-
-        if (deleteError) throw deleteError;
-
-        // Update local state - remove item from appropriate list
-        setTodayGroup(prev => prev ? { 
-          ...prev, 
-          items: prev.items.filter(i => i.id !== item.id),
-          count: prev.count - 1
-        } : null);
-        setOlderDates(prev => prev.map(dateGroup => ({
-          ...dateGroup,
-          items: dateGroup.items.filter(i => i.id !== item.id)
-        })));
-      } else {
-        // Update quantity in purchase history
-        const { error: updateError } = await supabase
-          .from('Purchase history')
-          .update({ Quantity: remainingQuantity })
-          .eq('id', item.id);
-
-        if (updateError) throw updateError;
-
-        // Update local state - update quantity in appropriate list
-        setTodayGroup(prev => prev ? {
-          ...prev,
-          items: prev.items.map(i => 
-            i.id === item.id ? { ...i, Quantity: remainingQuantity } : i
-          )
-        } : null);
-        setOlderDates(prev => prev.map(dateGroup => ({
-          ...dateGroup,
-          items: dateGroup.items.map(i => 
-            i.id === item.id ? { ...i, Quantity: remainingQuantity } : i
-          )
-        })));
+        existingItemId = newItem?.id;
       }
 
       // Store for undo functionality
-      const restoredItem: RestoredItem = {
+      const addedToGroceryItem: AddedToGroceryItem = {
         originalItem: item,
-        restoredQuantity: selectedQuantity,
-        restoredAt: Date.now(),
-        wasDeleted: remainingQuantity <= 0
+        addedAt: Date.now(),
+        wasNewItem,
+        existingItemId,
+        originalQuantity
       };
-      setRecentlyRestored(restoredItem);
+      setRecentlyAddedToGrocery(addedToGroceryItem);
 
       toast({
-        title: "Item restored",
-        description: `${selectedQuantity} ${item.Item} moved back to grocery list`,
+        title: "Item added to grocery list",
+        description: `Item "${item.Item}" added to grocery list.`,
         action: (
           <ToastAction 
-            altText="Undo restore" 
-            onClick={() => undoRestore(restoredItem)}
+            altText="Undo add" 
+            onClick={() => undoAddToGrocery(addedToGroceryItem)}
           >
             Undo
           </ToastAction>
@@ -275,15 +309,15 @@ export function PurchaseHistory() {
       });
     } catch (error) {
       toast({
-        title: "Error restoring item",
-        description: "Failed to restore item to grocery list",
+        title: "Error adding item to grocery list",
+        description: "Failed to add item to grocery list",
         variant: "destructive",
       });
     }
   };
 
-  const undoRestore = async (restoredItem?: RestoredItem) => {
-    const itemToUndo = restoredItem || recentlyRestored;
+  const undoDelete = async (deletedItem?: DeletedItem) => {
+    const itemToUndo = deletedItem || recentlyDeleted;
     if (!itemToUndo) return;
 
     try {
@@ -293,7 +327,50 @@ export function PurchaseHistory() {
       // Helper function for case-insensitive comparison
       const normalizeItemName = (name: string) => name.toLowerCase().trim();
 
-      // Remove the restored quantity from grocery list
+      // Re-add the item to purchase history
+      const { error: insertError } = await supabase
+        .from('Purchase history')
+        .insert([
+          {
+            Item: itemToUndo.originalItem.Item,
+            Quantity: itemToUndo.originalItem.Quantity,
+            user_id: user.data.user.id,
+            last_bought: itemToUndo.originalItem.last_bought,
+            img: itemToUndo.originalItem.img
+          }
+        ]);
+
+      if (insertError) throw insertError;
+
+      // Refresh purchase history
+      await fetchPurchaseHistory();
+
+      setRecentlyDeleted(null);
+      toast({
+        title: "Delete undone!",
+        description: `Item "${itemToUndo.originalItem.Item}" moved back to purchase history.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error undoing delete",
+        description: "Failed to undo delete operation",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const undoAddToGrocery = async (addedItem?: AddedToGroceryItem) => {
+    const itemToUndo = addedItem || recentlyAddedToGrocery;
+    if (!itemToUndo) return;
+
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      // Helper function for case-insensitive comparison
+      const normalizeItemName = (name: string) => name.toLowerCase().trim();
+
+      // Remove the added quantity from grocery list
       const { data: allItems, error: fetchError } = await supabase
         .from('Grocery list')
         .select('*')
@@ -308,7 +385,7 @@ export function PurchaseHistory() {
 
       if (groceryItems && groceryItems.length > 0) {
         const groceryItem = groceryItems[0];
-        const newQuantity = (groceryItem.Quantity || 0) - itemToUndo.restoredQuantity;
+        const newQuantity = (groceryItem.Quantity || 0) - itemToUndo.originalItem.Quantity;
         
         if (newQuantity <= 0) {
           // Remove from grocery list entirely
@@ -329,59 +406,15 @@ export function PurchaseHistory() {
         }
       }
 
-      // Restore to purchase history
-      if (itemToUndo.wasDeleted) {
-        // Re-add the item to purchase history
-        const { error: insertError } = await supabase
-          .from('Purchase history')
-          .insert([
-            {
-              Item: itemToUndo.originalItem.Item,
-              Quantity: itemToUndo.restoredQuantity,
-              user_id: user.data.user.id,
-              last_bought: itemToUndo.originalItem.last_bought,
-              img: itemToUndo.originalItem.img
-            }
-          ]);
-
-        if (insertError) throw insertError;
-      } else {
-        // Update the existing purchase history item to add back the quantity
-        const newQuantity = itemToUndo.originalItem.Quantity + itemToUndo.restoredQuantity;
-        const { error: updateError } = await supabase
-          .from('Purchase history')
-          .update({ Quantity: newQuantity })
-          .eq('id', itemToUndo.originalItem.id);
-
-        if (updateError) throw updateError;
-
-        // Update local state
-        setTodayGroup(prev => prev ? {
-          ...prev,
-          items: prev.items.map(i => 
-            i.id === itemToUndo.originalItem.id ? { ...i, Quantity: newQuantity } : i
-          )
-        } : null);
-        setOlderDates(prev => prev.map(dateGroup => ({
-          ...dateGroup,
-          items: dateGroup.items.map(i => 
-            i.id === itemToUndo.originalItem.id ? { ...i, Quantity: newQuantity } : i
-          )
-        })));
-      }
-
-      // Refresh purchase history
-      await fetchPurchaseHistory();
-
-      setRecentlyRestored(null);
+      setRecentlyAddedToGrocery(null);
       toast({
-        title: "Restore undone!",
-        description: `${itemToUndo.restoredQuantity} ${itemToUndo.originalItem.Item} moved back to purchase history`,
+        title: "Add to grocery list undone!",
+        description: `Item "${itemToUndo.originalItem.Item}" removed from grocery list.`,
       });
     } catch (error) {
       toast({
-        title: "Error undoing restore",
-        description: "Failed to undo restore operation",
+        title: "Error undoing add to grocery list",
+        description: "Failed to undo add to grocery list operation",
         variant: "destructive",
       });
     }
@@ -479,15 +512,26 @@ export function PurchaseHistory() {
                           {formatDate(item.last_bought)}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => restoreToGroceryList(item)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Restore to grocery list"
-                      >
-                        <Undo2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addToGroceryList(item)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Add to grocery list"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deletePurchaseHistory(item)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Card>
@@ -566,15 +610,26 @@ export function PurchaseHistory() {
                           {formatDate(item.last_bought)}
                         </div>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => restoreToGroceryList(item)}
-                        className="opacity-0 group-hover:opacity-100 transition-opacity"
-                        title="Restore to grocery list"
-                      >
-                        <Undo2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addToGroceryList(item)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Add to grocery list"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => deletePurchaseHistory(item)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Delete item"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </Card>

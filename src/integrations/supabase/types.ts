@@ -21,6 +21,7 @@ export type Database = {
           Item: string
           Quantity: number
           user_id: string | null
+          order: number
         }
         Insert: {
           created_at?: string
@@ -28,6 +29,7 @@ export type Database = {
           Item: string
           Quantity?: number
           user_id?: string | null
+          order?: number
         }
         Update: {
           created_at?: string
@@ -35,6 +37,7 @@ export type Database = {
           Item?: string
           Quantity?: number
           user_id?: string | null
+          order?: number
         }
         Relationships: []
       }
