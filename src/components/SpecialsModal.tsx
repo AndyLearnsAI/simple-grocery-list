@@ -216,7 +216,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         const newQuantity = originalQuantity + 1;
         const { error } = await supabase
           .from('Grocery list')
-          .update({ Quantity: newQuantity })
+          .update({ 
+            Quantity: newQuantity,
+            price: item.price,
+            discount: item.discount
+          })
           .eq('id', existingItem.id);
         if (error) throw error;
         addedItemId = existingItem.id;
@@ -238,9 +242,20 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
         const newOrder = (maxOrderData?.order || 0) + 1;
 
+        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
+
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img, order: newOrder })
+          .insert({ 
+            Item: item.item, 
+            Quantity: 1, 
+            user_id: user.id, 
+            img: item.img, 
+            order: newOrder,
+            price: item.price,
+            discount: item.discount,
+            notes: note
+          })
           .select('id')
           .single();
         if (error) throw error;
@@ -319,7 +334,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             user_id: user.id, 
             img: item.img,
             Quantity: 1, // Add default quantity
-            order: newOrder // Add order
+            order: newOrder, // Add order
+            price: item.price,
+            discount: item.discount
           });
 
         if (error) throw error;
@@ -411,7 +428,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         const newQuantity = originalQuantity + quantity;
         const { error } = await supabase
           .from('Grocery list')
-          .update({ Quantity: newQuantity })
+          .update({ 
+            Quantity: newQuantity,
+            price: item.price,
+            discount: item.discount
+          })
           .eq('id', existingItem.id);
         if (error) throw error;
         addedItemId = existingItem.id;
@@ -435,7 +456,15 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img, order: newOrder })
+          .insert({ 
+            Item: item.item, 
+            Quantity: quantity, 
+            user_id: user.id, 
+            img: item.img, 
+            order: newOrder,
+            price: item.price,
+            discount: item.discount
+          })
           .select('id')
           .single();
         if (error) throw error;
