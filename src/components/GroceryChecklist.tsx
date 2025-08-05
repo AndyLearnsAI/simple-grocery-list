@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -269,6 +269,7 @@ export function GroceryChecklist() {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItem, setNewItem] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [recentlyDeleted, setRecentlyDeleted] = useState<DeletedItem | null>(null);
   const [quantitySelector, setQuantitySelector] = useState<{
     isOpen: boolean;
@@ -1358,6 +1359,11 @@ export function GroceryChecklist() {
     }
   };
 
+  // Filter items based on search term
+  const filteredItems = items.filter(item =>
+    item.Item.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -1385,6 +1391,27 @@ export function GroceryChecklist() {
             <Button onClick={addItem} size="sm">
               <Plus className="h-4 w-4" />
             </Button>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search items..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-10"
+            />
+            {searchTerm && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSearchTerm("")}
+                className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
           </div>
 
           {/* Sort Button */}
@@ -1415,7 +1442,7 @@ export function GroceryChecklist() {
 
           {/* Grocery List Items */}
           <div className={`space-y-2 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
-            {items.map((item, index) => (
+            {filteredItems.map((item, index) => (
               <TouchSortableGroceryItem
                 key={item.id}
                 item={item}
@@ -1424,7 +1451,7 @@ export function GroceryChecklist() {
                 onRemove={removeItem}
                 onReorder={reorderItems}
                 index={index}
-                totalItems={items.length}
+                totalItems={filteredItems.length}
                 dragDestination={dragDestination}
                 onDragDestinationChange={(destination) => {
                   setDragDestination(destination);
@@ -1433,10 +1460,13 @@ export function GroceryChecklist() {
             ))}
 
             {/* Empty State */}
-            {items.length === 0 && (
+            {filteredItems.length === 0 && (
               <div className="p-6 text-center">
                 <div className="text-muted-foreground">
-                  Your grocery list is empty. Add some items to get started!
+                  {searchTerm 
+                    ? `No items found matching "${searchTerm}". Try a different search term.`
+                    : "Your grocery list is empty. Add some items to get started!"
+                  }
                 </div>
               </div>
             )}
