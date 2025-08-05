@@ -63,7 +63,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const ITEMS_PER_PAGE = 20;
+  const ITEMS_PER_PAGE = isMobile ? 6 : 20;
 
   useEffect(() => {
     if (isOpen) {
@@ -528,11 +528,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 p-1 sm:p-2 h-full overflow-y-auto">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-0 p-0 h-full overflow-y-auto">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative min-h-[120px] sm:min-h-[140px] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[2/3] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
@@ -550,11 +550,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                 </div>
                                 
                                 {/* Add/Remove Button */}
-                                <div className="absolute top-1 left-1">
+                                <div className="absolute top-2 left-2">
                                   <Button
                                     size="sm"
                                     variant={addedItems.has(item.id) ? "default" : "secondary"}
-                                    className={`w-6 h-6 sm:w-8 sm:h-8 p-0 rounded-full ${
+                                    className={`w-8 h-8 sm:w-10 sm:h-10 p-0 rounded-full ${
                                       addedItems.has(item.id) 
                                         ? 'bg-green-500 hover:bg-green-600 text-white' 
                                         : 'bg-green-100 hover:bg-green-200 text-green-600 border border-green-300'
@@ -569,26 +569,26 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                     }}
                                   >
                                     {addedItems.has(item.id) ? (
-                                      <Check className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                                     ) : (
-                                      <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
+                                      <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                                     )}
                                   </Button>
                                 </div>
                                 
                                 {/* Heart Button */}
-                                <div className="absolute top-1 right-1">
+                                <div className="absolute top-2 right-2">
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="w-6 h-6 sm:w-8 sm:h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
+                                    className="w-8 h-8 sm:w-10 sm:h-10 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleToggleSavedItem(item);
                                     }}
                                   >
                                     <Heart 
-                                      className={`w-3 h-3 sm:w-4 sm:h-4 ${
+                                      className={`w-4 h-4 sm:w-5 sm:h-5 ${
                                         savedItems.has(item.id)
                                           ? 'fill-red-500 text-red-500'
                                           : 'text-gray-400 hover:text-red-500'
@@ -598,13 +598,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                 </div>
                                 
                                 {/* Price and Savings positioned above item name, aligned left */}
-                                <div className="absolute bottom-1 left-1 flex flex-col gap-1 w-[calc(100%-0.5rem)]">
+                                <div className="absolute bottom-2 left-2 flex flex-col gap-2 w-[calc(100%-1rem)]">
                                   {/* Price and Savings Row */}
                                   <div className="flex items-center gap-1 flex-wrap">
                                     {/* Price Circle */}
                                     {item.price && (
-                                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
-                                        <div className="text-center leading-tight text-[6px] sm:text-[8px]">
+                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
+                                        <div className="text-center leading-tight text-[8px] sm:text-[10px]">
                                           {item.price.split(' ').map((part, index) => (
                                             <div key={index}>
                                               {part}
@@ -616,8 +616,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
                                     {/* Savings Box */}
                                     {item.discount && (
-                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[40px] sm:max-w-[50px] flex-shrink-0">
-                                        <p className="text-[5px] sm:text-[6px] font-bold text-gray-800 leading-tight text-center">
+                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[50px] sm:max-w-[60px] flex-shrink-0">
+                                        <p className="text-[7px] sm:text-[8px] font-bold text-gray-800 leading-tight text-center">
                                           {item.discount}
                                         </p>
                                       </div>
@@ -625,7 +625,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   </div>
                                   
                                   {/* Product Name at bottom, aligned left */}
-                                  <p className="text-[8px] sm:text-[10px] font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
+                                  <p className="text-[10px] sm:text-[12px] font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
                                     {item.item}
                                   </p>
                                 </div>

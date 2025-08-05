@@ -278,7 +278,7 @@ function TouchSortableSavedlistItem({
   return (
     <Card 
       ref={itemRef}
-      className={`p-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-4 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -341,7 +341,7 @@ function TouchSortableSavedlistItem({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <div className="font-medium text-xs sm:text-sm break-words text-foreground">
+                <div className="font-medium text-sm break-words text-foreground">
                   {item.Item}
                 </div>
                 {!isQuantityEditing && (
@@ -420,7 +420,7 @@ function TouchSortableSavedlistItem({
             </div>
           ) : (
             <div className="flex items-center gap-2 group">
-              <div className="font-medium text-xs sm:text-sm text-muted-foreground">
+              <div className="font-medium text-sm text-muted-foreground">
                 {item.selectedQuantity}
               </div>
               <Button
@@ -1046,7 +1046,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             </div>
 
             {/* Saved List Items */}
-            <div className={`space-y-2 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            <div className={`space-y-0 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
               {filteredItems.map((item, index) => (
                 <TouchSortableSavedlistItem
                   key={item.id}

@@ -233,7 +233,7 @@ function TouchSortableGroceryItem({
   return (
     <Card 
       ref={itemRef}
-      className={`p-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-4 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -309,7 +309,7 @@ function TouchSortableGroceryItem({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <div className={`font-medium text-xs sm:text-sm break-words ${
+                <div className={`font-medium text-sm break-words ${
                   item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
                 }`}>
                   {item.Item}
@@ -390,7 +390,7 @@ function TouchSortableGroceryItem({
             </div>
           ) : (
             <div className="flex items-center gap-2 group">
-              <div className="font-medium text-xs sm:text-sm text-muted-foreground">
+              <div className="font-medium text-sm text-muted-foreground">
                 {item.Quantity}
               </div>
               <Button
@@ -1207,7 +1207,7 @@ export function GroceryChecklist() {
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <div className={`space-y-2 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+          <div className={`space-y-0 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
             {filteredItems.map((item, index) => (
               <TouchSortableGroceryItem
                 key={item.id}
