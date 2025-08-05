@@ -296,10 +296,31 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           description: `${item.item} removed from saved list.`,
         });
       } else {
+        // Get the highest order value to place new item at the end
+        const { data: maxOrderData, error: maxOrderError } = await supabase
+          .from('SavedlistItems')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116: "No rows found"
+          throw maxOrderError;
+        }
+
+        const newOrder = (maxOrderData?.order || 0) + 1;
+
         // Add to saved list
         const { error } = await supabase
           .from('SavedlistItems')
-          .insert({ Item: item.item, user_id: user.id, img: item.img });
+          .insert({ 
+            Item: item.item, 
+            user_id: user.id, 
+            img: item.img,
+            Quantity: 1, // Add default quantity
+            order: newOrder // Add order
+          });
 
         if (error) throw error;
 

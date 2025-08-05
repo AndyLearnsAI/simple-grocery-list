@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ImagePreviewModal } from "./ImagePreviewModal";
 
 interface SavedlistItem {
   id: number;
@@ -34,6 +35,7 @@ function TouchSortableSavedlistItem({
   onRemove, 
   onReorder,
   onUpdateItemName,
+  onImageClick,
   index,
   totalItems,
   dragDestination,
@@ -44,6 +46,7 @@ function TouchSortableSavedlistItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onUpdateItemName: (id: number, newName: string) => Promise<boolean>;
+  onImageClick: (url: string, name: string) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -272,7 +275,7 @@ function TouchSortableSavedlistItem({
           </div>
           
           {item.img && (
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item.img!, item.Item)}>
               <img
                 src={item.img}
                 alt={item.Item}
@@ -362,6 +365,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const [searchTerm, setSearchTerm] = useState("");
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -917,122 +921,131 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh]">
-        <DialogHeader>
-          <DialogTitle>Add Saved Items</DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-4">
-          {/* Add new item input */}
-          <div className="flex gap-2">
-            <Input
-              placeholder="Add new item..."
-              value={newItem}
-              onChange={(e) => setNewItem(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && addItem()}
-              className="flex-1"
-            />
-            <Button onClick={addItem} size="sm">
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-
-          {/* Search Bar and Sort Button */}
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+    <>
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>Add Saved Items</DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            {/* Add new item input */}
+            <div className="flex gap-2">
               <Input
-                placeholder="Search items..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-10"
+                placeholder="Add new item..."
+                value={newItem}
+                onChange={(e) => setNewItem(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && addItem()}
+                className="flex-1"
               />
-              {searchTerm && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+              <Button onClick={addItem} size="sm">
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Search Bar and Sort Button */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search items..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {searchTerm && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <ArrowUpDown className="h-4 w-4" />
+                    Sort
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => sortItems('newest')}>
+                    Sort by newest
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => sortItems('oldest')}>
+                    Sort by oldest
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => sortItems('az')}>
+                    Sort A-Z
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => sortItems('za')}>
+                    Sort Z-A
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            {/* Saved List Items */}
+            <div className={`space-y-2 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+              {filteredItems.map((item, index) => (
+                <TouchSortableSavedlistItem
+                  key={item.id}
+                  item={item}
+                  onUpdateQuantity={updateQuantity}
+                  onRemove={removeItem}
+                  onReorder={reorderItems}
+                  onUpdateItemName={updateItemName}
+                  onImageClick={(url, name) => setPreviewImage({ url, name })}
+                  index={index}
+                  totalItems={filteredItems.length}
+                  dragDestination={dragDestination}
+                  onDragDestinationChange={(destination) => {
+                    setDragDestination(destination);
+                  }}
+                />
+              ))}
+
+              {/* Empty State */}
+              {filteredItems.length === 0 && (
+                <div className="p-6 text-center">
+                  <div className="text-muted-foreground">
+                    {searchTerm 
+                      ? `No items found matching "${searchTerm}". Try a different search term.`
+                      : "No saved list items yet. Add some items to get started!"
+                    }
+                  </div>
+                </div>
               )}
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <ArrowUpDown className="h-4 w-4" />
-                  Sort
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => sortItems('newest')}>
-                  Sort by newest
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => sortItems('oldest')}>
-                  Sort by oldest
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => sortItems('az')}>
-                  Sort A-Z
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => sortItems('za')}>
-                  Sort Z-A
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
 
-          {/* Saved List Items */}
-          <div className={`space-y-2 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
-            {filteredItems.map((item, index) => (
-              <TouchSortableSavedlistItem
-                key={item.id}
-                item={item}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeItem}
-                onReorder={reorderItems}
-                onUpdateItemName={updateItemName}
-                index={index}
-                totalItems={filteredItems.length}
-                dragDestination={dragDestination}
-                onDragDestinationChange={(destination) => {
-                  setDragDestination(destination);
-                }}
-              />
-            ))}
-
-            {/* Empty State */}
-            {filteredItems.length === 0 && (
-              <div className="p-6 text-center">
-                <div className="text-muted-foreground">
-                  {searchTerm 
-                    ? `No items found matching "${searchTerm}". Try a different search term.`
-                    : "No saved list items yet. Add some items to get started!"
-                  }
-                </div>
-              </div>
-            )}
+            <div className="flex gap-2 pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={handleClose}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={addSelectedItems}
+                disabled={selectedCount === 0}
+                className="flex-1"
+              >
+                Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
+              </Button>
+            </div>
           </div>
-
-          <div className="flex gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={addSelectedItems}
-              disabled={selectedCount === 0}
-              className="flex-1"
-            >
-              Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageUrl={previewImage?.url || null}
+        itemName={previewImage?.name || ''}
+      />
+    </>
   );
 }

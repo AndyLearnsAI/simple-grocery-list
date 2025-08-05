@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
+import { ImagePreviewModal } from "./ImagePreviewModal";
 
 interface GroceryItem {
   id: number;
@@ -40,6 +41,7 @@ function TouchSortableGroceryItem({
   onRemove, 
   onReorder,
   onUpdateItemName,
+  onImageClick,
   index,
   totalItems,
   dragDestination,
@@ -51,6 +53,7 @@ function TouchSortableGroceryItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onUpdateItemName: (id: number, newName: string) => Promise<boolean>;
+  onImageClick: (url: string, name: string) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -78,8 +81,8 @@ function TouchSortableGroceryItem({
     if (name.length > 99) {
       return "Item name cannot exceed 99 characters";
     }
-    // Check for special characters and emojis
-    const specialCharRegex = /[^\w\s\-]/;
+    // Check for special characters and emojis (now allows periods)
+    const specialCharRegex = /[^\w\s\-\.]/;
     if (specialCharRegex.test(name)) {
       return "Item name cannot contain special characters";
     }
@@ -312,7 +315,7 @@ function TouchSortableGroceryItem({
           </Button>
           
           {item.img && (
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item.img!, item.Item)}>
               <img
                 src={item.img}
                 alt={item.Item}
@@ -444,6 +447,7 @@ export function GroceryChecklist() {
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -1676,6 +1680,7 @@ export function GroceryChecklist() {
                 onRemove={removeItem}
                 onReorder={reorderItems}
                 onUpdateItemName={updateItemName}
+                onImageClick={(url, name) => setPreviewImage({ url, name })}
                 index={index}
                 totalItems={filteredItems.length}
                 dragDestination={dragDestination}
@@ -1751,6 +1756,13 @@ export function GroceryChecklist() {
         itemName={quantitySelector.item?.Item || ''}
         maxQuantity={quantitySelector.item?.Quantity || 1}
         actionType={quantitySelector.actionType}
+      />
+
+      <ImagePreviewModal
+        isOpen={!!previewImage}
+        onClose={() => setPreviewImage(null)}
+        imageUrl={previewImage?.url || null}
+        itemName={previewImage?.name || ''}
       />
     </div>
   );
