@@ -66,9 +66,21 @@ export function VoiceChatbot({ isOpen, onClose, onItemsAdded }: VoiceChatbotProp
   // Handle voice recognition errors
   useEffect(() => {
     if (error) {
+      let helpfulMessage = error;
+      
+      // Provide more helpful error messages
+      if (error.includes('not-allowed') || error.includes('permission')) {
+        helpfulMessage = 'Microphone access denied. Please allow microphone permissions in your browser settings and try again.';
+      } else if (error.includes('HTTPS')) {
+        helpfulMessage = 'Voice recognition requires HTTPS. Please use HTTPS or localhost for development.';
+      } else if (error.includes('not supported')) {
+        helpfulMessage = 'Voice recognition is not supported in your browser. Please use Chrome or Edge, or try text input instead.';
+      }
+      
       addMessage({
         type: 'assistant',
-        content: `Voice recognition error: ${error}. Please try again or use text input instead.`
+        content: `${helpfulMessage}\n\nYou can still use text input to add items to your list.`,
+        suggestions: ['Try text input', 'How does this work?']
       });
     }
   }, [error]);
@@ -86,7 +98,8 @@ export function VoiceChatbot({ isOpen, onClose, onItemsAdded }: VoiceChatbotProp
     if (!isSupported) {
       addMessage({
         type: 'assistant',
-        content: 'Voice recognition is not supported in your browser. Please use text input instead.'
+        content: 'Voice recognition is not supported in your browser. Please use Chrome or Edge for voice features, or try text input instead.',
+        suggestions: ['Try text input', 'How does this work?']
       });
       return;
     }

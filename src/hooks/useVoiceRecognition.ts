@@ -55,7 +55,36 @@ export function useVoiceRecognition(): UseVoiceRecognitionReturn {
 
     recognitionInstance.onerror = (event) => {
       console.error('Speech recognition error:', event.error);
-      setError(`Speech recognition error: ${event.error}`);
+      
+      let errorMessage = 'Speech recognition error';
+      
+      switch (event.error) {
+        case 'not-allowed':
+          errorMessage = 'Microphone access denied. Please allow microphone permissions and try again.';
+          break;
+        case 'no-speech':
+          errorMessage = 'No speech detected. Please speak clearly and try again.';
+          break;
+        case 'audio-capture':
+          errorMessage = 'Audio capture failed. Please check your microphone and try again.';
+          break;
+        case 'network':
+          errorMessage = 'Network error. Please check your internet connection.';
+          break;
+        case 'service-not-allowed':
+          errorMessage = 'Speech recognition service not allowed. Please try again.';
+          break;
+        case 'bad-grammar':
+          errorMessage = 'Speech recognition grammar error. Please try again.';
+          break;
+        case 'language-not-supported':
+          errorMessage = 'Language not supported. Please try again.';
+          break;
+        default:
+          errorMessage = `Speech recognition error: ${event.error}`;
+      }
+      
+      setError(errorMessage);
       setIsListening(false);
     };
 
@@ -78,11 +107,18 @@ export function useVoiceRecognition(): UseVoiceRecognitionReturn {
       return;
     }
 
+    // Check if we're on HTTPS (required for speech recognition)
+    if (window.location.protocol !== 'https:' && window.location.hostname !== 'localhost') {
+      setError('Speech recognition requires HTTPS. Please use HTTPS or localhost.');
+      return;
+    }
+
     try {
+      setError(null);
       recognition.start();
     } catch (err) {
-      setError('Failed to start speech recognition');
       console.error('Start listening error:', err);
+      setError('Failed to start speech recognition. Please try again or use text input instead.');
     }
   }, [recognition]);
 
