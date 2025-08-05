@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
@@ -9,27 +9,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  DragStartEvent,
-  DragOverlay,
-} from '@dnd-kit/core';
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import {
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 interface GroceryItem {
   id: number;
@@ -52,34 +31,133 @@ interface DeletedItem extends GroceryItem {
   addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
 }
 
-// Sortable Item Component
-function SortableGroceryItem({ item, onToggle, onUpdateQuantity, onRemove }: {
+// Touch-optimized Drag and Drop Item Component
+function TouchSortableGroceryItem({ 
+  item, 
+  onToggle, 
+  onUpdateQuantity, 
+  onRemove, 
+  onReorder,
+  index,
+  totalItems
+}: {
   item: GroceryItem;
   onToggle: (id: number) => void;
   onUpdateQuantity: (id: number, change: number) => void;
   onRemove: (id: number) => void;
+  onReorder: (fromIndex: number, toIndex: number) => void;
+  index: number;
+  totalItems: number;
 }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: item.id });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [currentY, setCurrentY] = useState(0);
+  const [dragOffset, setDragOffset] = useState(0);
+  const itemRef = useRef<HTMLDivElement>(null);
+  const dragRef = useRef<HTMLDivElement>(null);
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    setDragStartY(touch.clientY);
+    setCurrentY(touch.clientY);
+    setIsDragging(true);
+    setDragOffset(0);
   };
 
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    
+    const touch = e.touches[0];
+    const deltaY = touch.clientY - dragStartY;
+    setCurrentY(touch.clientY);
+    setDragOffset(deltaY);
+    
+    // Prevent scrolling while dragging
+    e.preventDefault();
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    
+    const touch = e.changedTouches[0];
+    const deltaY = touch.clientY - dragStartY;
+    const itemHeight = itemRef.current?.offsetHeight || 80;
+    const threshold = itemHeight / 2;
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    
+    // Calculate new position
+    if (Math.abs(deltaY) > threshold) {
+      const direction = deltaY > 0 ? 1 : -1;
+      const newIndex = Math.max(0, Math.min(totalItems - 1, index + direction));
+      
+      if (newIndex !== index) {
+        onReorder(index, newIndex);
+      }
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left mouse button
+    
+    setDragStartY(e.clientY);
+    setCurrentY(e.clientY);
+    setIsDragging(true);
+    setDragOffset(0);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaY = e.clientY - dragStartY;
+    setCurrentY(e.clientY);
+    setDragOffset(deltaY);
+  };
+
+  const handleMouseUp = (e: MouseEvent) => {
+    if (!isDragging) return;
+    
+    const deltaY = e.clientY - dragStartY;
+    const itemHeight = itemRef.current?.offsetHeight || 80;
+    const threshold = itemHeight / 2;
+    
+    setIsDragging(false);
+    setDragOffset(0);
+    
+    // Calculate new position
+    if (Math.abs(deltaY) > threshold) {
+      const direction = deltaY > 0 ? 1 : -1;
+      const newIndex = Math.max(0, Math.min(totalItems - 1, index + direction));
+      
+      if (newIndex !== index) {
+        onReorder(index, newIndex);
+      }
+    }
+  };
+
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+  }, [isDragging, dragStartY]);
+
   return (
-    <Card
-      ref={setNodeRef}
-      style={style}
+    <Card 
+      ref={itemRef}
       className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isDragging ? 'bg-green-50 border-green-200' : ''
+        isDragging ? 'bg-green-50 border-green-200 shadow-lg scale-105' : ''
       }`}
+      style={{
+        transform: isDragging ? `translateY(${dragOffset}px)` : 'none',
+        zIndex: isDragging ? 1000 : 'auto',
+      }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
@@ -97,15 +175,16 @@ function SortableGroceryItem({ item, onToggle, onUpdateQuantity, onRemove }: {
           </Button>
           
           {/* Drag Handle */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing"
-            {...attributes}
-            {...listeners}
+          <div
+            ref={dragRef}
+            className="h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
           >
-            <GripVertical className="h-4 w-4" />
-          </Button>
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
           
           {item.img && (
             <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -174,15 +253,7 @@ export function GroceryChecklist() {
   }>({ isOpen: false, item: null, actionType: 'purchase' });
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
-  const [activeId, setActiveId] = useState<number | null>(null);
   const { toast } = useToast();
-
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
 
   // Fetch items from Supabase
   useEffect(() => {
@@ -225,51 +296,30 @@ export function GroceryChecklist() {
     }
   };
 
-  const handleDragStart = (event: DragStartEvent) => {
-    setActiveId(event.active.id as number);
-  };
+  // Touch-optimized reordering function
+  const reorderItems = async (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex) return;
 
-  const handleDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
+    try {
+      const newItems = [...items];
+      const [movedItem] = newItems.splice(fromIndex, 1);
+      newItems.splice(toIndex, 0, movedItem);
+      
+      // Update order values
+      const updatedItems = newItems.map((item, index) => ({
+        ...item,
+        order: index + 1
+      }));
 
-    if (active.id !== over?.id) {
-      try {
-        setItems((items) => {
-          const oldIndex = items.findIndex((item) => item.id === active.id);
-          const newIndex = items.findIndex((item) => item.id === over?.id);
-
-          if (oldIndex === -1 || newIndex === -1) {
-            console.error('Could not find item indices:', { oldIndex, newIndex, activeId: active.id, overId: over?.id });
-            return items;
-          }
-
-          const newItems = arrayMove(items, oldIndex, newIndex);
-          
-          // Update order values for all items (user-specific)
-          const updatedItems = newItems.map((item, index) => ({
-            ...item,
-            order: index + 1
-          }));
-
-          console.log('Drag operation - old index:', oldIndex, 'new index:', newIndex);
-          console.log('Updated items with new order:', updatedItems.map(item => ({ id: item.id, order: item.order })));
-
-          // Update database with new order
-          updateItemsOrder(updatedItems);
-
-          return updatedItems;
-        });
-      } catch (error) {
-        console.error('Error in handleDragEnd:', error);
-        toast({
-          title: "Error",
-          description: "Failed to reorder items",
-          variant: "destructive",
-        });
-        // Refresh items to revert to original order
-        fetchItems();
-      }
+      setItems(updatedItems);
+      await updateItemsOrder(updatedItems);
+    } catch (error) {
+      console.error('Error reordering items:', error);
+      toast({
+        title: "Error reordering",
+        description: "Failed to reorder items",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1174,91 +1224,29 @@ export function GroceryChecklist() {
           </div>
 
           {/* Grocery List Items */}
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={handleDragStart}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={items.map(item => item.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {items.map((item) => (
-                  <SortableGroceryItem
-                    key={item.id}
-                    item={item}
-                    onToggle={toggleItem}
-                    onUpdateQuantity={updateQuantity}
-                    onRemove={removeItem}
-                  />
-                ))}
+          <div className="space-y-2">
+            {items.map((item, index) => (
+              <TouchSortableGroceryItem
+                key={item.id}
+                item={item}
+                onToggle={toggleItem}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeItem}
+                onReorder={reorderItems} // This will be updated by the new component
+                index={index}
+                totalItems={items.length}
+              />
+            ))}
 
-                {/* Empty State */}
-                {items.length === 0 && (
-                  <div className="p-6 text-center">
-                    <div className="text-muted-foreground">
-                      Your grocery list is empty. Add some items to get started!
-                    </div>
-                  </div>
-                )}
+            {/* Empty State */}
+            {items.length === 0 && (
+              <div className="p-6 text-center">
+                <div className="text-muted-foreground">
+                  Your grocery list is empty. Add some items to get started!
+                </div>
               </div>
-            </SortableContext>
-
-            <DragOverlay>
-              {activeId ? (
-                <Card className="p-4 shadow-card bg-green-50 border-green-200">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 rounded-full border-2 border-muted-foreground/20"
-                      >
-                        <Check className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 w-6 p-0 text-muted-foreground"
-                      >
-                        <GripVertical className="h-4 w-4" />
-                      </Button>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm break-words">
-                          {items.find(item => item.id === activeId)?.Item}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="text-sm font-medium min-w-[2rem] text-center">
-                        {items.find(item => item.id === activeId)?.Quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="h-8 w-8 p-0"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 w-8 p-0 text-muted-foreground"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+            )}
+          </div>
         </div>
       </Card>
 
