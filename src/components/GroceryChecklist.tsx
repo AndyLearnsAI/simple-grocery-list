@@ -466,15 +466,25 @@ export function GroceryChecklist() {
     try {
       const user = await supabase.auth.getUser();
       if (!user.data.user) return;
-      const itemsToUpdate = updatedItems.map(item => ({
-        id: item.id,
-        order: item.order
-      }));
-      for (const item of itemsToUpdate) {
+      
+      // First, set all items to temporary negative order values to avoid conflicts
+      for (const item of updatedItems) {
+        const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
+        const { error } = await supabase
+          .from('Grocery list')
+          .update({ order: tempOrder })
+          .eq('id', item.id)
+          .eq('user_id', user.data.user.id);
+        if (error) throw error;
+      }
+      
+      // Then, set all items to their final positive order values
+      for (const item of updatedItems) {
         const { error } = await supabase
           .from('Grocery list')
           .update({ order: item.order })
-          .eq('id', item.id);
+          .eq('id', item.id)
+          .eq('user_id', user.data.user.id);
         if (error) throw error;
       }
     } catch (error) {

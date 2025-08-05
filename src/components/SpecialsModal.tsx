@@ -62,7 +62,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const ITEMS_PER_PAGE = 9;
+  const ITEMS_PER_PAGE = 20;
 
   useEffect(() => {
     if (isOpen) {
@@ -504,7 +504,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           onModalClose?.();
         }
       }}>
-        <DialogContent className="w-[95vw] max-w-4xl h-[90vh] flex flex-col p-3 sm:p-4">
+        <DialogContent className="w-[95vw] max-w-6xl h-[95vh] flex flex-col p-2 sm:p-4">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
@@ -518,21 +518,21 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             </div>
           ) : (
             <Carousel setApi={setCarouselApi} className="flex-1 flex flex-col justify-between">
-              <div className="relative flex-1">
+              <div className="relative flex-1 overflow-hidden">
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2 h-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-1 sm:gap-2 p-1 sm:p-2 h-full overflow-y-auto">
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[2/3] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative min-h-[120px] sm:min-h-[140px] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
-                              {/* Product Image positioned top right, covering 75% of card */}
+                              {/* Product Image positioned top right, covering 60% of card */}
                               <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
-                                <div className="absolute top-0 right-0 w-3/4 h-3/4">
+                                <div className="absolute top-0 right-0 w-3/5 h-3/5">
                                   <img
                                     src={item.img || '/placeholder.svg'}
                                     alt={item.item}
@@ -544,11 +544,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                 </div>
                                 
                                 {/* Add/Remove Button */}
-                                <div className="absolute top-2 left-2">
+                                <div className="absolute top-1 left-1">
                                   <Button
                                     size="sm"
                                     variant={addedItems.has(item.id) ? "default" : "secondary"}
-                                    className={`w-8 h-8 p-0 rounded-full ${
+                                    className={`w-6 h-6 sm:w-8 sm:h-8 p-0 rounded-full ${
                                       addedItems.has(item.id) 
                                         ? 'bg-green-500 hover:bg-green-600 text-white' 
                                         : 'bg-green-100 hover:bg-green-200 text-green-600 border border-green-300'
@@ -563,26 +563,26 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                     }}
                                   >
                                     {addedItems.has(item.id) ? (
-                                      <Check className="w-4 h-4" />
+                                      <Check className="w-3 h-3 sm:w-4 sm:h-4" />
                                     ) : (
-                                      <Plus className="w-4 h-4" />
+                                      <Plus className="w-3 h-3 sm:w-4 sm:h-4" />
                                     )}
                                   </Button>
                                 </div>
                                 
                                 {/* Heart Button */}
-                                <div className="absolute top-2 right-2">
+                                <div className="absolute top-1 right-1">
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="w-8 h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
+                                    className="w-6 h-6 sm:w-8 sm:h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleToggleSavedItem(item);
                                     }}
                                   >
                                     <Heart 
-                                      className={`w-4 h-4 ${
+                                      className={`w-3 h-3 sm:w-4 sm:h-4 ${
                                         savedItems.has(item.id)
                                           ? 'fill-red-500 text-red-500'
                                           : 'text-gray-400 hover:text-red-500'
@@ -592,13 +592,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                 </div>
                                 
                                 {/* Price and Savings positioned above item name, aligned left */}
-                                <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
+                                <div className="absolute bottom-1 left-1 flex flex-col gap-1 w-[calc(100%-0.5rem)]">
                                   {/* Price and Savings Row */}
                                   <div className="flex items-center gap-1 flex-wrap">
                                     {/* Price Circle */}
                                     {item.price && (
-                                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
-                                        <div className="text-center leading-tight text-[8px] sm:text-xs">
+                                      <div className="w-8 h-8 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
+                                        <div className="text-center leading-tight text-[6px] sm:text-[8px]">
                                           {item.price.split(' ').map((part, index) => (
                                             <div key={index}>
                                               {part}
@@ -610,8 +610,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
                                     {/* Savings Box */}
                                     {item.discount && (
-                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[50px] sm:max-w-[60px] flex-shrink-0">
-                                        <p className="text-[6px] sm:text-[8px] font-bold text-gray-800 leading-tight text-center">
+                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[40px] sm:max-w-[50px] flex-shrink-0">
+                                        <p className="text-[5px] sm:text-[6px] font-bold text-gray-800 leading-tight text-center">
                                           {item.discount}
                                         </p>
                                       </div>
@@ -619,7 +619,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   </div>
                                   
                                   {/* Product Name at bottom, aligned left */}
-                                  <p className="text-[10px] sm:text-xs font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
+                                  <p className="text-[8px] sm:text-[10px] font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
                                     {item.item}
                                   </p>
                                 </div>
@@ -631,8 +631,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="absolute left-[-8px] top-1/2 -translate-y-1/2" />
-                <CarouselNext className="absolute right-[-8px] top-1/2 -translate-y-1/2" />
+                <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
+                <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
               </div>
               <div className="text-center text-sm text-muted-foreground pt-2">
                 Page {currentPage} of {totalPages}

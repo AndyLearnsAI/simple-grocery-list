@@ -441,73 +441,34 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const updateItemsOrder = async (updatedItems: SelectedSavedlistItem[]) => {
     try {
       const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        console.error('No authenticated user found');
-        return;
+      if (!user.data.user) return;
+      
+      // First, set all items to temporary negative order values to avoid conflicts
+      for (const item of updatedItems) {
+        const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
+        const { error } = await supabase
+          .from('SavedlistItems')
+          .update({ order: tempOrder })
+          .eq('id', item.id)
+          .eq('user_id', user.data.user.id);
+        if (error) throw error;
       }
-
-      // Get current order values from database to compare
-      const { data: currentItems, error: fetchError } = await supabase
-        .from('SavedlistItems')
-        .select('id, order')
-        .eq('user_id', user.data.user.id)
-        .in('id', updatedItems.map(item => item.id));
-
-      if (fetchError) {
-        console.error('Error fetching current order values:', fetchError);
-        throw fetchError;
-      }
-
-      // Create a map of current order values
-      const currentOrderMap = new Map(currentItems?.map(item => [item.id, item.order]) || []);
-
-      // Filter items that actually need their order updated
-      const itemsToUpdate = updatedItems.filter(item => {
-        const currentOrder = currentOrderMap.get(item.id);
-        return currentOrder !== item.order;
-      });
-
-      if (itemsToUpdate.length === 0) {
-        return;
-      }
-
-             // First, set all items to temporary negative order values to avoid conflicts
-       // Use a much larger negative range to ensure no conflicts
-       for (const item of itemsToUpdate) {
-         const tempOrder = -(1000000 + item.id); // Use item ID to ensure uniqueness
-         const { error } = await supabase
-           .from('SavedlistItems')
-           .update({ order: tempOrder })
-           .eq('id', item.id)
-           .eq('user_id', user.data.user.id);
-
-         if (error) {
-           console.error('Error setting temporary order for item:', item.id, error);
-           throw error;
-         }
-       }
-
+      
       // Then, set all items to their final positive order values
-      for (const item of itemsToUpdate) {
+      for (const item of updatedItems) {
         const { error } = await supabase
           .from('SavedlistItems')
           .update({ order: item.order })
           .eq('id', item.id)
           .eq('user_id', user.data.user.id);
-
-        if (error) {
-          console.error('Error setting final order for item:', item.id, error);
-          throw error;
-        }
+        if (error) throw error;
       }
     } catch (error) {
-      console.error('Error updating item order:', error);
       toast({
         title: "Error",
         description: "Failed to save new item order",
         variant: "destructive",
       });
-      // Refresh items to revert to original order
       fetchSavedlistItems();
     }
   };
