@@ -145,7 +145,8 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
               {
                 Item: selectedItem.Item,
                 Quantity: selectedItem.selectedQuantity,
-                user_id: user.data.user.id
+                user_id: user.data.user.id,
+                img: selectedItem.img
               }
             ])
             .select()
@@ -329,7 +330,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-2xl w-[95vw] max-h-[90vh]">
         <DialogHeader>
           <div className="flex items-center justify-between">
             <DialogTitle>{isEditMode ? "Edit Saved Items" : "Add Saved Items"}</DialogTitle>
@@ -337,7 +338,11 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
               variant="ghost"
               size="sm"
               onClick={() => setIsEditMode(!isEditMode)}
-              className="h-8 w-8 p-0"
+              className={`h-8 w-8 p-0 flex-shrink-0 ${
+                isEditMode 
+                  ? 'bg-primary text-primary-foreground hover:bg-primary/90' 
+                  : ''
+              }`}
             >
               <Edit3 className="h-4 w-4" />
             </Button>
@@ -353,9 +358,9 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
-                className="flex-1"
+                className="flex-1 min-w-0"
               />
-              <Button onClick={addItem} size="sm">
+              <Button onClick={addItem} size="sm" className="flex-shrink-0">
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -365,27 +370,30 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {savedlistItems.map((item) => (
                 <Card key={item.id} className="p-3 shadow-card">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1">
-                      {item.img && (
-                        <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                          <img
-                            src={item.img}
-                            alt={item.Item}
-                            className="w-full h-full object-contain"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-foreground truncate">
-                          {item.Item}
-                        </div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Image container */}
+                    {item.img && (
+                      <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+                        <img
+                          src={item.img}
+                          alt={item.Item}
+                          className="w-full h-full object-contain"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
+                        />
+                      </div>
+                    )}
+                    
+                    {/* Item name - flexible width with proper text wrapping */}
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm text-foreground break-words">
+                        {item.Item}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    
+                    {/* Quantity controls - fixed width */}
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <Button
                         variant="outline"
                         size="sm"
@@ -433,29 +441,30 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           ) : null}
 
           <div className="flex gap-2 pt-4 border-t">
-            <Button
-              variant="outline"
-              onClick={handleClose}
-              className="flex-1"
-            >
-              Cancel
-            </Button>
             {isEditMode ? (
               <Button
-                onClick={saveChanges}
-                disabled={saving}
+                onClick={() => setIsEditMode(false)}
                 className="flex-1"
               >
-                {saving ? "Saving..." : "Save Changes"}
+                Close
               </Button>
             ) : (
-              <Button
-                onClick={addSelectedItems}
-                disabled={selectedCount === 0}
-                className="flex-1"
-              >
-                Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleClose}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={addSelectedItems}
+                  disabled={selectedCount === 0}
+                  className="flex-1"
+                >
+                  Add {selectedCount} Item{selectedCount === 1 ? '' : 's'}
+                </Button>
+              </>
             )}
           </div>
         </div>

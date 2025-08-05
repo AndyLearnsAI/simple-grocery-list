@@ -422,7 +422,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           onModalClose?.();
         }
       }}>
-        <DialogContent className="w-full max-w-2xl h-[90vh] flex flex-col p-3 sm:p-4">
+        <DialogContent className="w-[95vw] max-w-4xl h-[90vh] flex flex-col p-3 sm:p-4">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
@@ -440,7 +440,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-3 gap-1 p-2 h-full">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-2 h-full">
                         {page.map((item) => (
                           <Card
                             key={item.id}
@@ -509,38 +509,38 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   </Button>
                                 </div>
                                 
-                                                                 {/* Price and Savings positioned above item name, aligned left */}
-                                 <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
-                                   {/* Price and Savings Row */}
-                                   <div className="flex items-center gap-1">
-                                     {/* Price Circle */}
-                                     {item.price && (
-                                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600">
-                                         <div className="text-center leading-tight">
-                                           {item.price.split(' ').map((part, index) => (
-                                             <div key={index}>
-                                               {part}
-                                             </div>
-                                           ))}
-                                         </div>
-                                       </div>
-                                     )}
+                                {/* Price and Savings positioned above item name, aligned left */}
+                                <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
+                                  {/* Price and Savings Row */}
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {/* Price Circle */}
+                                    {item.price && (
+                                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
+                                        <div className="text-center leading-tight text-[8px] sm:text-xs">
+                                          {item.price.split(' ').map((part, index) => (
+                                            <div key={index}>
+                                              {part}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
-                                     {/* Savings Box */}
-                                     {item.discount && (
-                                       <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[60px]">
-                                         <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
-                                           {item.discount}
-                                         </p>
-                                       </div>
-                                     )}
-                                   </div>
-                                   
-                                   {/* Product Name at bottom, aligned left */}
-                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left line-clamp-2 md:line-clamp-none">
-                                     {item.item}
-                                   </p>
-                                 </div>
+                                    {/* Savings Box */}
+                                    {item.discount && (
+                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[50px] sm:max-w-[60px] flex-shrink-0">
+                                        <p className="text-[6px] sm:text-[8px] font-bold text-gray-800 leading-tight text-center">
+                                          {item.discount}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Product Name at bottom, aligned left */}
+                                  <p className="text-[10px] sm:text-xs font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
+                                    {item.item}
+                                  </p>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -572,7 +572,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           setDetailViewItem(null);
           setDetailQuantity(1);
         }}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="w-[95vw] max-w-2xl">
             <DialogHeader className="relative">
               <DialogTitle>Add to List</DialogTitle>
               {/* Heart Icon */}
@@ -600,33 +600,33 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   e.currentTarget.src = '/placeholder.svg';
                 }}
               />
-                             <div className="w-full px-4 min-w-0">
-                 <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
-                 {detailViewItem.price && (
-                   <div className="mb-4">
-                     <div className="flex items-center justify-center gap-2">
-                       {/* Price Circle */}
-                       <div className="w-32 h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600">
-                         <div className="text-center leading-tight">
-                           {detailViewItem.price.split(' ').map((part, index) => (
-                             <div key={index}>
-                               {part}
-                             </div>
-                           ))}
-                         </div>
-                       </div>
-                       
-                       {/* Savings Box */}
-                       {detailViewItem.discount && (
-                         <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[200px]">
-                           <p className="text-sm font-bold text-gray-800 leading-tight text-center">
-                             {detailViewItem.discount}
-                           </p>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                 )}
+              <div className="w-full px-4 min-w-0">
+                <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
+                {detailViewItem.price && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      {/* Price Circle */}
+                      <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm sm:text-lg shadow-lg border-2 border-red-600 flex-shrink-0">
+                        <div className="text-center leading-tight">
+                          {detailViewItem.price.split(' ').map((part, index) => (
+                            <div key={index}>
+                              {part}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Savings Box */}
+                      {detailViewItem.discount && (
+                        <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
+                          <p className="text-xs sm:text-sm font-bold text-gray-800 leading-tight text-center">
+                            {detailViewItem.discount}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-center gap-4 mt-4">

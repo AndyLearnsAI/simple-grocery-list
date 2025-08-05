@@ -883,7 +883,7 @@ export function GroceryChecklist() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className={`font-medium text-sm ${
+                      <div className={`font-medium text-sm break-words ${
                         item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
                       }`}>
                         {item.Item}

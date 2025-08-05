@@ -465,7 +465,7 @@ export function PurchaseHistory() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-foreground">
+                        <div className="font-medium text-sm text-foreground break-words">
                           {item.Item}
                         </div>
                         <div className="text-xs text-muted-foreground">
@@ -552,7 +552,7 @@ export function PurchaseHistory() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-foreground">
+                        <div className="font-medium text-sm text-foreground break-words">
                           {item.Item}
                         </div>
                         <div className="text-xs text-muted-foreground">
