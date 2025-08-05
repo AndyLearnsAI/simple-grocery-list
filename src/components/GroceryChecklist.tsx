@@ -170,7 +170,7 @@ function TouchSortableGroceryItem({
   return (
     <Card 
       ref={itemRef}
-      className={`p-4 shadow-card transition-all duration-150 hover:shadow-elegant relative overflow-hidden ${
+      className={`p-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -178,7 +178,7 @@ function TouchSortableGroceryItem({
       style={{
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
-        transition: isDragging ? 'none' : 'all 150ms ease-out',
+        transition: isDragging ? 'none' : 'none',
       }}
     >
       <div className="flex items-center justify-between">
