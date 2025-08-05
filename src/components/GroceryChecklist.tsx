@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3 } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -39,6 +39,7 @@ function TouchSortableGroceryItem({
   onUpdateQuantity, 
   onRemove, 
   onReorder,
+  onUpdateItemName,
   index,
   totalItems,
   dragDestination,
@@ -49,6 +50,7 @@ function TouchSortableGroceryItem({
   onUpdateQuantity: (id: number, change: number) => void;
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
+  onUpdateItemName: (id: number, newName: string) => Promise<boolean>;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -58,8 +60,83 @@ function TouchSortableGroceryItem({
   const [dragStartY, setDragStartY] = useState(0);
   const [currentY, setCurrentY] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValue, setEditValue] = useState(item.Item);
+  const [editError, setEditError] = useState("");
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
+
+  // Validation function
+  const validateItemName = (name: string): string => {
+    if (!name.trim()) {
+      return "Item name cannot be empty";
+    }
+    if (name.length > 99) {
+      return "Item name cannot exceed 99 characters";
+    }
+    // Check for special characters and emojis
+    const specialCharRegex = /[^\w\s\-]/;
+    if (specialCharRegex.test(name)) {
+      return "Item name cannot contain special characters";
+    }
+    // Check for emojis
+    const emojiRegex = /[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/u;
+    if (emojiRegex.test(name)) {
+      return "Item name cannot contain emojis";
+    }
+    return "";
+  };
+
+  const handleEditStart = () => {
+    setIsEditing(true);
+    setEditValue(item.Item);
+    setEditError("");
+    // Focus the input after a brief delay to ensure it's rendered
+    setTimeout(() => {
+      editInputRef.current?.focus();
+      editInputRef.current?.select();
+    }, 0);
+  };
+
+  const handleEditSave = async () => {
+    const trimmedValue = editValue.trim();
+    const error = validateItemName(trimmedValue);
+    
+    if (error) {
+      setEditError(error);
+      return;
+    }
+
+    if (trimmedValue === item.Item) {
+      setIsEditing(false);
+      return;
+    }
+
+    const success = await onUpdateItemName(item.id, trimmedValue);
+    if (success) {
+      setIsEditing(false);
+      setEditError("");
+    } else {
+      setEditError("Item name already exists");
+    }
+  };
+
+  const handleEditCancel = () => {
+    setIsEditing(false);
+    setEditValue(item.Item);
+    setEditError("");
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleEditSave();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      handleEditCancel();
+    }
+  };
 
   const calculateDestination = (deltaY: number) => {
     const itemHeight = itemRef.current?.offsetHeight || 80;
@@ -175,6 +252,8 @@ function TouchSortableGroceryItem({
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
+      } ${
+        isEditing ? 'bg-green-50 border-green-200' : ''
       }`}
       style={{
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
@@ -187,7 +266,9 @@ function TouchSortableGroceryItem({
           {/* Drag Handle */}
           <div
             ref={dragRef}
-            className="h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+              isEditing ? 'opacity-50 pointer-events-none' : ''
+            }`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -201,11 +282,12 @@ function TouchSortableGroceryItem({
             variant="ghost"
             size="sm"
             onClick={() => onToggle(item.id)}
+            disabled={isEditing}
             className={`h-6 w-6 p-0 rounded-full border-2 ${
               item.checked 
                 ? 'bg-primary border-primary text-primary-foreground' 
                 : 'border-muted-foreground/20 hover:border-primary'
-            }`}
+            } ${isEditing ? 'opacity-50' : ''}`}
           >
             {item.checked && <Check className="h-3 w-3" />}
           </Button>
@@ -222,20 +304,49 @@ function TouchSortableGroceryItem({
               />
             </div>
           )}
+          
           <div className="flex-1 min-w-0">
-            <div className={`font-medium text-sm break-words ${
-              item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-            }`}>
-              {item.Item}
-            </div>
+            {isEditing ? (
+              <div className="space-y-1">
+                <Input
+                  ref={editInputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleEditSave}
+                  onKeyDown={handleEditKeyDown}
+                  className="h-8 text-sm"
+                  maxLength={99}
+                />
+                {editError && (
+                  <div className="text-xs text-destructive">{editError}</div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <div className={`font-medium text-sm break-words flex-1 ${
+                  item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+                }`}>
+                  {item.Item}
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEditStart}
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Edit3 className="h-3 w-3" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        
+        <div className={`flex items-center gap-2 ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
           <Button
             variant="outline"
             size="sm"
             onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.Quantity <= 1}
+            disabled={item.Quantity <= 1 || isEditing}
             className="h-8 w-8 p-0"
           >
             <Minus className="h-3 w-3" />
@@ -247,6 +358,7 @@ function TouchSortableGroceryItem({
             variant="outline"
             size="sm"
             onClick={() => onUpdateQuantity(item.id, 1)}
+            disabled={isEditing}
             className="h-8 w-8 p-0"
           >
             <Plus className="h-3 w-3" />
@@ -255,6 +367,7 @@ function TouchSortableGroceryItem({
             variant="ghost"
             size="sm"
             onClick={() => onRemove(item.id)}
+            disabled={isEditing}
             className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
           >
             <Trash2 className="h-4 w-4" />
@@ -745,6 +858,62 @@ export function GroceryChecklist() {
         description: "Failed to update item quantity",
         variant: "destructive",
       });
+    }
+  };
+
+  const updateItemName = async (id: number, newName: string): Promise<boolean> => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to edit items",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      // Check for duplicate names (case-insensitive)
+      const existingItem = items.find(item => 
+        item.id !== id && 
+        item.Item.toLowerCase().trim() === newName.toLowerCase().trim()
+      );
+
+      if (existingItem) {
+        toast({
+          title: "Duplicate item name",
+          description: "An item with this name already exists",
+          variant: "destructive",
+        });
+        return false;
+      }
+
+      const { error } = await supabase
+        .from('Grocery list')
+        .update({ Item: newName })
+        .eq('id', id)
+        .eq('user_id', user.data.user.id);
+
+      if (error) throw error;
+
+      setItems(prev => prev.map(i => 
+        i.id === id ? { ...i, Item: newName } : i
+      ));
+
+      toast({
+        title: "Item updated",
+        description: "Item name has been updated",
+      });
+
+      return true;
+    } catch (error) {
+      console.error('Error updating item name:', error);
+      toast({
+        title: "Error updating item",
+        description: "Failed to update item name",
+        variant: "destructive",
+      });
+      return false;
     }
   };
 
@@ -1448,6 +1617,7 @@ export function GroceryChecklist() {
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
                 onReorder={reorderItems}
+                onUpdateItemName={updateItemName}
                 index={index}
                 totalItems={filteredItems.length}
                 dragDestination={dragDestination}
