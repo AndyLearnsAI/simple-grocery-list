@@ -41,14 +41,6 @@ export function GroceryChecklist() {
     item: GroceryItem | null;
     actionType: 'purchase';
   }>({ isOpen: false, item: null, actionType: 'purchase' });
-  const [swipeState, setSwipeState] = useState<{
-    [key: number]: { 
-      startX: number; 
-      currentX: number; 
-      isDragging: boolean;
-      direction: 'left' | 'right' | null;
-    }
-  }>({});
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
   const { toast } = useToast();
@@ -383,99 +375,6 @@ export function GroceryChecklist() {
         description: "Failed to update item quantity",
         variant: "destructive",
       });
-    }
-  };
-
-  const handleTouchStart = (e: React.TouchEvent, itemId: number) => {
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        startX: e.touches[0].clientX,
-        currentX: e.touches[0].clientX,
-        isDragging: true,
-        direction: null
-      }
-    }));
-  };
-
-  const handleTouchMove = (e: React.TouchEvent, itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return;
-
-    const currentX = e.touches[0].clientX;
-    const deltaX = currentX - state.startX;
-
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        ...state,
-        currentX,
-        direction: deltaX < 0 ? 'left' : deltaX > 0 ? 'right' : null
-      }
-    }));
-  };
-
-  const handleTouchEnd = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return;
-
-    const deltaX = state.currentX - state.startX;
-    
-    // Reset swipe state
-    setSwipeState(prev => ({
-      ...prev,
-      [itemId]: {
-        startX: 0,
-        currentX: 0,
-        isDragging: false,
-        direction: null
-      }
-    }));
-
-    // Execute action based on swipe distance
-    if (Math.abs(deltaX) > 100) {
-      if (deltaX < 0) {
-        // Left swipe - delete
-        removeItem(itemId);
-      } else {
-        // Right swipe - purchase
-        toggleItem(itemId);
-      }
-    }
-  };
-
-  const getSwipeStyle = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return {};
-
-    const deltaX = state.currentX - state.startX;
-    const clampedDelta = Math.max(-150, Math.min(150, deltaX));
-    
-    return {
-      transform: `translateX(${clampedDelta}px)`,
-      transition: 'none'
-    };
-  };
-
-  const getSwipeIndicator = (itemId: number) => {
-    const state = swipeState[itemId];
-    if (!state?.isDragging) return null;
-
-    const deltaX = state.currentX - state.startX;
-    if (Math.abs(deltaX) < 50) return null;
-
-    if (deltaX < 0) {
-      return (
-        <div className="absolute right-4 top-1/2 transform -translate-y-1/2 text-destructive opacity-70">
-          <Trash2 className="h-5 w-5" />
-        </div>
-      );
-    } else {
-      return (
-        <div className="absolute left-4 top-1/2 transform -translate-y-1/2 text-primary opacity-70">
-          <Check className="h-5 w-5" />
-        </div>
-      );
     }
   };
 
@@ -850,12 +749,7 @@ export function GroceryChecklist() {
               <Card
                 key={item.id}
                 className="p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden"
-                style={getSwipeStyle(item.id)}
-                onTouchStart={(e) => handleTouchStart(e, item.id)}
-                onTouchMove={(e) => handleTouchMove(e, item.id)}
-                onTouchEnd={() => handleTouchEnd(item.id)}
               >
-                {getSwipeIndicator(item.id)}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 flex-1">
                     <Button
