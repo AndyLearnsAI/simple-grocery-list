@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical } from "lucide-react";
+import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical, ShoppingCart } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,15 +7,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { ImagePreviewModal } from "./ImagePreviewModal";
+import { ItemDetailModal } from "./ItemDetailModal";
 
 interface SavedlistItem {
   id: number;
   Item: string;
   Quantity: number;
   user_id?: string;
-  img?: string;
+  img?: string | null;
   order: number;
+  price?: string | null;
+  discount?: string | null;
+  notes?: string | null;
 }
 
 interface SelectedSavedlistItem extends SavedlistItem {
@@ -46,7 +49,7 @@ function TouchSortableSavedlistItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onUpdateItemName: (id: number, newName: string) => Promise<boolean>;
-  onImageClick: (url: string, name: string) => void;
+  onImageClick: (item: SavedlistItem) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -274,18 +277,20 @@ function TouchSortableSavedlistItem({
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
           
-          {item.img && (
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item.img!, item.Item)}>
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item)}>
+            {item.img ? (
               <img
                 src={item.img}
                 alt={item.Item}
                 className="w-full h-full object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                }}
+                onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
               />
-            </div>
-          )}
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ShoppingCart className="h-4 w-4 text-gray-400" />
+              </div>
+            )}
+          </div>
           
           <div className="flex-1 min-w-0">
             {isEditing ? (
@@ -365,7 +370,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const [searchTerm, setSearchTerm] = useState("");
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
-  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
+  const [detailModalItem, setDetailModalItem] = useState<SavedlistItem | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -998,7 +1003,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                   onRemove={removeItem}
                   onReorder={reorderItems}
                   onUpdateItemName={updateItemName}
-                  onImageClick={(url, name) => setPreviewImage({ url, name })}
+                  onImageClick={() => setDetailModalItem(item)}
                   index={index}
                   totalItems={filteredItems.length}
                   dragDestination={dragDestination}
@@ -1040,12 +1045,15 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           </div>
         </DialogContent>
       </Dialog>
-      <ImagePreviewModal
-        isOpen={!!previewImage}
-        onClose={() => setPreviewImage(null)}
-        imageUrl={previewImage?.url || null}
-        itemName={previewImage?.name || ''}
-      />
+      {detailModalItem && (
+        <ItemDetailModal
+          isOpen={!!detailModalItem}
+          onClose={() => setDetailModalItem(null)}
+          item={detailModalItem}
+          tableName="SavedlistItems"
+          onUpdate={fetchSavedlistItems}
+        />
+      )}
     </>
   );
 }
