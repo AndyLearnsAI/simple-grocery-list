@@ -308,7 +308,7 @@ function TouchSortableGroceryItem({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <div className={`font-medium text-sm break-words ${
+                <div className={`font-medium text-xs sm:text-sm break-words ${
                   item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
                 }`}>
                   {item.Item}
@@ -330,54 +330,66 @@ function TouchSortableGroceryItem({
         
         <div className="flex items-center gap-2">
           {isQuantityEditing ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemove(item.id)}
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(-1)}
-                disabled={editQuantity <= 1}
-                className="h-8 w-8 p-0"
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <Input
-                ref={editQuantityRef}
-                type="number"
-                value={editQuantity}
-                onChange={handleQuantityInputChange}
-                className="h-8 w-12 text-sm text-center appearance-none"
-                min="1"
-                max="99"
-                style={{ MozAppearance: 'textfield' }}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(1)}
-                className="h-8 w-8 p-0"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleQuantityEditToggle}
-                className="h-8 w-8 p-0"
-              >
-                <Check className="h-4 w-4 text-green-600" />
-              </Button>
-            </>
+            <div className="relative">
+              {/* Cross layout for quantity editing */}
+              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20">
+                {/* Top row */}
+                <div></div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuantityChange(1)}
+                  className="h-6 w-6 p-0"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <div></div>
+                
+                {/* Middle row */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(item.id)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+                <Input
+                  ref={editQuantityRef}
+                  type="number"
+                  value={editQuantity}
+                  onChange={handleQuantityInputChange}
+                  className="h-6 w-12 text-xs text-center appearance-none"
+                  min="1"
+                  max="99"
+                  style={{ MozAppearance: 'textfield' }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleQuantityEditToggle}
+                  className="h-6 w-6 p-0"
+                >
+                  <Check className="h-3 w-3 text-green-600" />
+                </Button>
+                
+                {/* Bottom row */}
+                <div></div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuantityChange(-1)}
+                  disabled={editQuantity <= 1}
+                  className="h-6 w-6 p-0"
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <div></div>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center gap-2 group">
-              <div className="font-medium text-sm text-muted-foreground">
+              <div className="font-medium text-xs sm:text-sm text-muted-foreground">
                 {item.Quantity}
               </div>
               <Button
@@ -608,17 +620,18 @@ export function GroceryChecklist() {
           i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
         ));
       } else {
-        const { data: maxOrderData, error: maxOrderError } = await supabase
+        const { data: minOrderData, error: minOrderError } = await supabase
           .from('Grocery list')
           .select('order')
           .eq('user_id', user.id)
-          .order('order', { ascending: false })
+          .order('order', { ascending: true })
           .limit(1)
           .single();
-        if (maxOrderError && maxOrderError.code !== 'PGRST116') {
-          throw maxOrderError;
+        if (minOrderError && minOrderError.code !== 'PGRST116') {
+          throw minOrderError;
         }
-        const newOrder = (maxOrderData?.order || 0) + 1;
+        // If no items exist, start with order 1, otherwise subtract 1 from minimum
+        const newOrder = minOrderData ? minOrderData.order - 1 : 1;
         const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
@@ -632,7 +645,7 @@ export function GroceryChecklist() {
         if (error) throw error;
         if (data) {
           const newItemWithChecked = { ...data, checked: false };
-          setItems(prev => [...prev, newItemWithChecked]);
+          setItems(prev => [newItemWithChecked, ...prev]);
         }
       }
       setNewItem("");
@@ -805,17 +818,18 @@ export function GroceryChecklist() {
       }
       if (itemToUndo.action === 'purchased') {
         try {
-          const { data: maxOrderData, error: maxOrderError } = await supabase
+          const { data: minOrderData, error: minOrderError } = await supabase
             .from('Grocery list')
             .select('order')
             .eq('user_id', user.data.user.id)
-            .order('order', { ascending: false })
+            .order('order', { ascending: true })
             .limit(1)
             .single();
-          if (maxOrderError && maxOrderError.code !== 'PGRST116') {
-            throw maxOrderError;
+          if (minOrderError && minOrderError.code !== 'PGRST116') {
+            throw minOrderError;
           }
-          const newOrder = (maxOrderData?.order || 0) + 1;
+          // If no items exist, start with order 1, otherwise subtract 1 from minimum
+          const newOrder = minOrderData ? minOrderData.order - 1 : 1;
           const { data, error } = await supabase
             .from('Grocery list')
             .insert([{
@@ -830,7 +844,7 @@ export function GroceryChecklist() {
           if (error) throw error;
           if (data) {
             const newItem = { ...data, checked: false };
-            setItems(prev => [...prev, newItem]);
+            setItems(prev => [newItem, ...prev]);
           }
           if (itemToUndo.purchaseHistoryId) {
             const { data: historyCheck, error: checkError } = await supabase
@@ -860,17 +874,18 @@ export function GroceryChecklist() {
         }
       } else if (itemToUndo.action === 'deleted') {
         try {
-          const { data: maxOrderData, error: maxOrderError } = await supabase
+          const { data: minOrderData, error: minOrderError } = await supabase
             .from('Grocery list')
             .select('order')
             .eq('user_id', user.data.user.id)
-            .order('order', { ascending: false })
+            .order('order', { ascending: true })
             .limit(1)
             .single();
-          if (maxOrderError && maxOrderError.code !== 'PGRST116') {
-            throw maxOrderError;
+          if (minOrderError && minOrderError.code !== 'PGRST116') {
+            throw minOrderError;
           }
-          const newOrder = (maxOrderData?.order || 0) + 1;
+          // If no items exist, start with order 1, otherwise subtract 1 from minimum
+          const newOrder = minOrderData ? minOrderData.order - 1 : 1;
           const { data: existingItems, error: checkError } = await supabase
             .from('Grocery list')
             .select('id, Item, Quantity')
@@ -901,7 +916,7 @@ export function GroceryChecklist() {
           if (error) throw error;
           if (data) {
             const newItem = { ...data, checked: false };
-            setItems(prev => [...prev, newItem]);
+            setItems(prev => [newItem, ...prev]);
           }
           await fetchItems();
           setRecentlyDeleted(null);

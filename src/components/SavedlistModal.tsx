@@ -340,7 +340,7 @@ function TouchSortableSavedlistItem({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <div className="font-medium text-sm break-words text-foreground">
+                <div className="font-medium text-xs sm:text-sm break-words text-foreground">
                   {item.Item}
                 </div>
                 {!isQuantityEditing && (
@@ -360,54 +360,66 @@ function TouchSortableSavedlistItem({
         
         <div className="flex items-center gap-2">
           {isQuantityEditing ? (
-            <>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onRemove(item.id)}
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(-1)}
-                disabled={editQuantity <= 1}
-                className="h-8 w-8 p-0"
-              >
-                <Minus className="h-3 w-3" />
-              </Button>
-              <Input
-                ref={editQuantityRef}
-                type="number"
-                value={editQuantity}
-                onChange={handleQuantityInputChange}
-                className="h-8 w-12 text-sm text-center appearance-none"
-                min="1"
-                max="99"
-                style={{ MozAppearance: 'textfield' }}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => handleQuantityChange(1)}
-                className="h-8 w-8 p-0"
-              >
-                <Plus className="h-3 w-3" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleQuantityEditToggle}
-                className="h-8 w-8 p-0"
-              >
-                <Check className="h-4 w-4 text-green-600" />
-              </Button>
-            </>
+            <div className="relative">
+              {/* Cross layout for quantity editing */}
+              <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20">
+                {/* Top row */}
+                <div></div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuantityChange(1)}
+                  className="h-6 w-6 p-0"
+                >
+                  <Plus className="h-3 w-3" />
+                </Button>
+                <div></div>
+                
+                {/* Middle row */}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onRemove(item.id)}
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive"
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+                <Input
+                  ref={editQuantityRef}
+                  type="number"
+                  value={editQuantity}
+                  onChange={handleQuantityInputChange}
+                  className="h-6 w-12 text-xs text-center appearance-none"
+                  min="1"
+                  max="99"
+                  style={{ MozAppearance: 'textfield' }}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleQuantityEditToggle}
+                  className="h-6 w-6 p-0"
+                >
+                  <Check className="h-3 w-3 text-green-600" />
+                </Button>
+                
+                {/* Bottom row */}
+                <div></div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleQuantityChange(-1)}
+                  disabled={editQuantity <= 1}
+                  className="h-6 w-6 p-0"
+                >
+                  <Minus className="h-3 w-3" />
+                </Button>
+                <div></div>
+              </div>
+            </div>
           ) : (
             <div className="flex items-center gap-2 group">
-              <div className="font-medium text-sm text-muted-foreground">
+              <div className="font-medium text-xs sm:text-sm text-muted-foreground">
                 {item.selectedQuantity}
               </div>
               <Button
@@ -623,20 +635,21 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
         return;
       }
 
-      // Get the highest order value to place new item at the end
-      const { data: maxOrderData, error: maxOrderError } = await supabase
+      // Get the minimum order value to place new item at the top
+      const { data: minOrderData, error: minOrderError } = await supabase
         .from('SavedlistItems')
         .select('order')
         .eq('user_id', user.data.user.id)
-        .order('order', { ascending: false })
+        .order('order', { ascending: true })
         .limit(1)
         .single();
 
-      if (maxOrderError && maxOrderError.code !== 'PGRST116') {
-        throw maxOrderError;
+      if (minOrderError && minOrderError.code !== 'PGRST116') {
+        throw minOrderError;
       }
 
-      const newOrder = (maxOrderData?.order || 0) + 1;
+      // If no items exist, start with order 1, otherwise subtract 1 from minimum
+      const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
       const { data, error } = await supabase
         .from('SavedlistItems')
@@ -658,7 +671,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
         selectedQuantity: data.Quantity || 1
       };
 
-      setSavedlistItems(prev => [...prev, newItemWithSelection]);
+      setSavedlistItems(prev => [newItemWithSelection, ...prev]);
       setNewItem("");
       toast({
         title: "Item added",

@@ -227,20 +227,21 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       } else {
         wasNew = true;
         
-        // Get the highest order value to place new item at the end (user-specific)
-        const { data: maxOrderData, error: maxOrderError } = await supabase
+        // Get the minimum order value to place new item at the top (user-specific)
+        const { data: minOrderData, error: minOrderError } = await supabase
           .from('Grocery list')
           .select('order')
           .eq('user_id', user.id)
-          .order('order', { ascending: false })
+          .order('order', { ascending: true })
           .limit(1)
           .single();
 
-        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-          throw maxOrderError;
+        if (minOrderError && minOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw minOrderError;
         }
 
-        const newOrder = (maxOrderData?.order || 0) + 1;
+        // If no items exist, start with order 1, otherwise subtract 1 from minimum
+        const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
         const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
 
@@ -311,20 +312,21 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           description: `${item.item} removed from saved list.`,
         });
       } else {
-        // Get the highest order value to place new item at the end
-        const { data: maxOrderData, error: maxOrderError } = await supabase
+        // Get the minimum order value to place new item at the top
+        const { data: minOrderData, error: minOrderError } = await supabase
           .from('SavedlistItems')
           .select('order')
           .eq('user_id', user.id)
-          .order('order', { ascending: false })
+          .order('order', { ascending: true })
           .limit(1)
           .single();
 
-        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116: "No rows found"
-          throw maxOrderError;
+        if (minOrderError && minOrderError.code !== 'PGRST116') { // PGRST116: "No rows found"
+          throw minOrderError;
         }
 
-        const newOrder = (maxOrderData?.order || 0) + 1;
+        // If no items exist, start with order 1, otherwise subtract 1 from minimum
+        const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
         const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
 
