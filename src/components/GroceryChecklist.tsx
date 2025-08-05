@@ -61,11 +61,14 @@ function TouchSortableGroceryItem({
   const [currentY, setCurrentY] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [isQuantityEditing, setIsQuantityEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.Item);
   const [editError, setEditError] = useState("");
+  const [editQuantity, setEditQuantity] = useState(item.Quantity || 1);
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const editQuantityRef = useRef<HTMLInputElement>(null);
 
   // Validation function
   const validateItemName = (name: string): string => {
@@ -92,7 +95,7 @@ function TouchSortableGroceryItem({
     setIsEditing(true);
     setEditValue(item.Item);
     setEditError("");
-    // Focus the input after a brief delay to ensure it's rendered
+    // Focus the name input after a brief delay to ensure it's rendered
     setTimeout(() => {
       editInputRef.current?.focus();
       editInputRef.current?.select();
@@ -108,18 +111,17 @@ function TouchSortableGroceryItem({
       return;
     }
 
-    if (trimmedValue === item.Item) {
-      setIsEditing(false);
-      return;
+    // Save name change
+    if (trimmedValue !== item.Item) {
+      const nameSuccess = await onUpdateItemName(item.id, trimmedValue);
+      if (!nameSuccess) {
+        setEditError("Item name already exists");
+        return;
+      }
     }
 
-    const success = await onUpdateItemName(item.id, trimmedValue);
-    if (success) {
-      setIsEditing(false);
-      setEditError("");
-    } else {
-      setEditError("Item name already exists");
-    }
+    setIsEditing(false);
+    setEditError("");
   };
 
   const handleEditCancel = () => {
@@ -136,6 +138,23 @@ function TouchSortableGroceryItem({
       e.preventDefault();
       handleEditCancel();
     }
+  };
+
+  const handleQuantityEditToggle = () => {
+    setIsQuantityEditing(prev => !prev);
+    setEditQuantity(item.Quantity || 1);
+  };
+
+  const handleQuantityChange = (change: number) => {
+    const newQuantity = Math.max(1, editQuantity + change);
+    setEditQuantity(newQuantity);
+    onUpdateQuantity(item.id, newQuantity + 10000); // Use absolute quantity
+  };
+
+  const handleQuantityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value) || 1;
+    setEditQuantity(Math.max(1, value));
+    onUpdateQuantity(item.id, Math.max(1, value) + 10000); // Use absolute quantity
   };
 
   const calculateDestination = (deltaY: number) => {
@@ -253,7 +272,7 @@ function TouchSortableGroceryItem({
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
       } ${
-        isEditing ? 'bg-green-50 border-green-200' : ''
+        isEditing || isQuantityEditing ? 'bg-green-50 border-green-200' : ''
       }`}
       style={{
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
@@ -261,124 +280,150 @@ function TouchSortableGroceryItem({
         transition: isDragging ? 'none' : 'none',
       }}
     >
-      <div className="space-y-3">
-        {/* Main Row: Drag Handle, Toggle Button, Image, Item Name, Edit Button, Trash Button */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3 flex-1">
-            {/* Drag Handle */}
-            <div
-              ref={dragRef}
-              className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
-                isEditing ? 'opacity-50 pointer-events-none' : ''
-              }`}
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-              onMouseDown={handleMouseDown}
-              style={{ touchAction: 'none' }}
-            >
-              <GripVertical className="h-4 w-4 text-muted-foreground" />
-            </div>
-            
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onToggle(item.id)}
-              disabled={isEditing}
-              className={`h-6 w-6 p-0 rounded-full border-2 ${
-                item.checked 
-                  ? 'bg-primary border-primary text-primary-foreground' 
-                  : 'border-muted-foreground/20 hover:border-primary'
-              } ${isEditing ? 'opacity-50' : ''}`}
-            >
-              {item.checked && <Check className="h-3 w-3" />}
-            </Button>
-            
-            {item.img && (
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
-                <img
-                  src={item.img}
-                  alt={item.Item}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
-            )}
-            
-            <div className="flex-1 min-w-0">
-              {isEditing ? (
-                <div className="space-y-1">
-                  <Input
-                    ref={editInputRef}
-                    value={editValue}
-                    onChange={(e) => setEditValue(e.target.value)}
-                    onBlur={handleEditSave}
-                    onKeyDown={handleEditKeyDown}
-                    className="h-8 text-sm"
-                    maxLength={99}
-                  />
-                  {editError && (
-                    <div className="text-xs text-destructive">{editError}</div>
-                  )}
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 group">
-                  <div className={`font-medium text-sm break-words flex-1 ${
-                    item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
-                  }`}>
-                    {item.Item}
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleEditStart}
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-            </div>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3 flex-1">
+          {/* Drag Handle */}
+          <div
+            ref={dragRef}
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+              isEditing ? 'opacity-50 pointer-events-none' : ''
+            }`}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            style={{ touchAction: 'none' }}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
           
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => onRemove(item.id)}
+            onClick={() => onToggle(item.id)}
             disabled={isEditing}
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+            className={`h-6 w-6 p-0 rounded-full border-2 ${
+              item.checked 
+                ? 'bg-primary border-primary text-primary-foreground' 
+                : 'border-muted-foreground/20 hover:border-primary'
+            } ${isEditing ? 'opacity-50' : ''}`}
           >
-            <Trash2 className="h-4 w-4" />
+            {item.checked && <Check className="h-3 w-3" />}
           </Button>
+          
+          {item.img && (
+            <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+              <img
+                src={item.img}
+                alt={item.Item}
+                className="w-full h-full object-contain"
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+          
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="space-y-1">
+                <Input
+                  ref={editInputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleEditSave}
+                  onKeyDown={handleEditKeyDown}
+                  className="h-8 text-sm"
+                  maxLength={99}
+                />
+                {editError && (
+                  <div className="text-xs text-destructive">{editError}</div>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <div className={`font-medium text-sm break-words ${
+                  item.checked ? 'line-through text-muted-foreground' : 'text-foreground'
+                }`}>
+                  {item.Item}
+                </div>
+                {!isQuantityEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditStart}
+                    className={`h-6 w-6 p-0 opacity-0 transition-opacity group-hover:opacity-100`}
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
         
-        {/* Second Row: Quantity Controls (only show if not editing) */}
-        {!isEditing && (
-          <div className="flex items-center justify-center gap-3">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUpdateQuantity(item.id, -1)}
-              disabled={item.Quantity <= 1}
-              className="h-8 w-8 p-0"
-            >
-              <Minus className="h-3 w-3" />
-            </Button>
-            <span className="text-sm font-medium min-w-[2rem] text-center">
-              {item.Quantity}
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => onUpdateQuantity(item.id, 1)}
-              className="h-8 w-8 p-0"
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {isQuantityEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(item.id)}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={editQuantity <= 1}
+                className="h-8 w-8 p-0"
+              >
+                <Minus className="h-3 w-3" />
+              </Button>
+              <Input
+                ref={editQuantityRef}
+                type="number"
+                value={editQuantity}
+                onChange={handleQuantityInputChange}
+                className="h-8 w-auto text-sm text-center appearance-none"
+                min="1"
+                style={{ MozAppearance: 'textfield' }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuantityChange(1)}
+                className="h-8 w-8 p-0"
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleQuantityEditToggle}
+                className="h-8 w-8 p-0"
+              >
+                <Check className="h-4 w-4 text-green-600" />
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <div className="font-medium text-sm text-muted-foreground">
+                {item.Quantity}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleQuantityEditToggle}
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Edit3 className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );
@@ -842,11 +887,17 @@ export function GroceryChecklist() {
     }
   };
 
-  const updateQuantity = async (id: number, change: number) => {
+  const updateQuantity = async (id: number, quantityUpdate: number) => {
     const item = items.find(i => i.id === id);
     if (!item) return;
 
-    const newQuantity = Math.max(1, (item.Quantity || 1) + change);
+    let newQuantity: number;
+    if (quantityUpdate > 10000) {
+      newQuantity = quantityUpdate - 10000;
+    } else {
+      newQuantity = Math.max(1, (item.Quantity || 1) + quantityUpdate);
+    }
+    newQuantity = Math.max(1, newQuantity); // Ensure quantity is at least 1
 
     try {
       const { error } = await supabase
