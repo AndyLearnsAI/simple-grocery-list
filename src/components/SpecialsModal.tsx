@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { QuantitySelector } from "./QuantitySelector";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { parseSmartSyntax } from "@/lib/utils";
 
 interface SpecialsItem {
   id: number;
@@ -62,7 +63,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
-  const ITEMS_PER_PAGE = 9;
+  const ITEMS_PER_PAGE = isMobile ? 6 : 20;
 
   useEffect(() => {
     if (isOpen) {
@@ -216,15 +217,47 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         const newQuantity = originalQuantity + 1;
         const { error } = await supabase
           .from('Grocery list')
-          .update({ Quantity: newQuantity })
+          .update({ 
+            Quantity: newQuantity,
+            price: item.price,
+            discount: item.discount
+          })
           .eq('id', existingItem.id);
         if (error) throw error;
         addedItemId = existingItem.id;
       } else {
         wasNew = true;
+        
+        // Get the minimum order value to place new item at the top (user-specific)
+        const { data: minOrderData, error: minOrderError } = await supabase
+          .from('Grocery list')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (minOrderError && minOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw minOrderError;
+        }
+
+        // If no items exist, start with order 1, otherwise subtract 1 from minimum
+        const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+
+        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
+
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: 1, user_id: user.id, img: item.img })
+          .insert({ 
+            Item: item.item, 
+            Quantity: 1, 
+            user_id: user.id, 
+            img: item.img, 
+            order: newOrder,
+            price: item.price,
+            discount: item.discount,
+            notes: note
+          })
           .select('id')
           .single();
         if (error) throw error;
@@ -280,10 +313,37 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           description: `${item.item} removed from saved list.`,
         });
       } else {
+        // Get the minimum order value to place new item at the top
+        const { data: minOrderData, error: minOrderError } = await supabase
+          .from('SavedlistItems')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: true })
+          .limit(1)
+          .single();
+
+        if (minOrderError && minOrderError.code !== 'PGRST116') { // PGRST116: "No rows found"
+          throw minOrderError;
+        }
+
+        // If no items exist, start with order 1, otherwise subtract 1 from minimum
+        const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+
+        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
+
         // Add to saved list
         const { error } = await supabase
           .from('SavedlistItems')
-          .insert({ Item: item.item, user_id: user.id, img: item.img });
+          .insert({ 
+            Item: item.item, 
+            user_id: user.id, 
+            img: item.img,
+            Quantity: 1, // Add default quantity
+            order: newOrder, // Add order
+            price: item.price,
+            discount: item.discount,
+            notes: note
+          });
 
         if (error) throw error;
 
@@ -374,15 +434,43 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         const newQuantity = originalQuantity + quantity;
         const { error } = await supabase
           .from('Grocery list')
-          .update({ Quantity: newQuantity })
+          .update({ 
+            Quantity: newQuantity,
+            price: item.price,
+            discount: item.discount
+          })
           .eq('id', existingItem.id);
         if (error) throw error;
         addedItemId = existingItem.id;
       } else {
         wasNew = true;
+        
+        // Get the highest order value to place new item at the end (user-specific)
+        const { data: maxOrderData, error: maxOrderError } = await supabase
+          .from('Grocery list')
+          .select('order')
+          .eq('user_id', user.id)
+          .order('order', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (maxOrderError && maxOrderError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          throw maxOrderError;
+        }
+
+        const newOrder = (maxOrderData?.order || 0) + 1;
+
         const { data: newItem, error } = await supabase
           .from('Grocery list')
-          .insert({ Item: item.item, Quantity: quantity, user_id: user.id, img: item.img })
+          .insert({ 
+            Item: item.item, 
+            Quantity: quantity, 
+            user_id: user.id, 
+            img: item.img, 
+            order: newOrder,
+            price: item.price,
+            discount: item.discount
+          })
           .select('id')
           .single();
         if (error) throw error;
@@ -422,7 +510,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           onModalClose?.();
         }
       }}>
-        <DialogContent className="w-full max-w-2xl h-[90vh] flex flex-col p-3 sm:p-4">
+        <DialogContent className="w-[95vw] max-w-6xl h-[95vh] flex flex-col p-2 sm:p-4">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
           </DialogHeader>
@@ -436,11 +524,11 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             </div>
           ) : (
             <Carousel setApi={setCarouselApi} className="flex-1 flex flex-col justify-between">
-              <div className="relative flex-1">
+              <div className="relative flex-1 overflow-hidden">
                 <CarouselContent className="h-full">
                   {pages.map((page, pageIndex) => (
                     <CarouselItem key={pageIndex} className="h-full">
-                      <div className="grid grid-cols-3 gap-1 p-2 h-full">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-0 p-0 h-full overflow-y-auto">
                         {page.map((item) => (
                           <Card
                             key={item.id}
@@ -448,9 +536,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
-                              {/* Product Image positioned top right, covering 75% of card */}
+                              {/* Product Image positioned top right, covering 60% of card */}
                               <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
-                                <div className="absolute top-0 right-0 w-3/4 h-3/4">
+                                <div className="absolute top-0 right-0 w-3/5 h-3/5">
                                   <img
                                     src={item.img || '/placeholder.svg'}
                                     alt={item.item}
@@ -466,7 +554,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   <Button
                                     size="sm"
                                     variant={addedItems.has(item.id) ? "default" : "secondary"}
-                                    className={`w-8 h-8 p-0 rounded-full ${
+                                    className={`w-8 h-8 sm:w-10 sm:h-10 p-0 rounded-full ${
                                       addedItems.has(item.id) 
                                         ? 'bg-green-500 hover:bg-green-600 text-white' 
                                         : 'bg-green-100 hover:bg-green-200 text-green-600 border border-green-300'
@@ -481,9 +569,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                     }}
                                   >
                                     {addedItems.has(item.id) ? (
-                                      <Check className="w-4 h-4" />
+                                      <Check className="w-4 h-4 sm:w-5 sm:h-5" />
                                     ) : (
-                                      <Plus className="w-4 h-4" />
+                                      <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
                                     )}
                                   </Button>
                                 </div>
@@ -493,14 +581,14 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="w-8 h-8 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
+                                    className="w-8 h-8 sm:w-10 sm:h-10 p-0 rounded-full bg-white bg-opacity-80 hover:bg-opacity-100"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       handleToggleSavedItem(item);
                                     }}
                                   >
                                     <Heart 
-                                      className={`w-4 h-4 ${
+                                      className={`w-4 h-4 sm:w-5 sm:h-5 ${
                                         savedItems.has(item.id)
                                           ? 'fill-red-500 text-red-500'
                                           : 'text-gray-400 hover:text-red-500'
@@ -509,38 +597,38 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   </Button>
                                 </div>
                                 
-                                                                 {/* Price and Savings positioned above item name, aligned left */}
-                                 <div className="absolute bottom-2 left-2 flex flex-col gap-1 w-[calc(100%-1rem)]">
-                                   {/* Price and Savings Row */}
-                                   <div className="flex items-center gap-1">
-                                     {/* Price Circle */}
-                                     {item.price && (
-                                       <div className="w-16 h-16 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600">
-                                         <div className="text-center leading-tight">
-                                           {item.price.split(' ').map((part, index) => (
-                                             <div key={index}>
-                                               {part}
-                                             </div>
-                                           ))}
-                                         </div>
-                                       </div>
-                                     )}
+                                {/* Price and Savings positioned above item name, aligned left */}
+                                <div className="absolute bottom-2 left-2 flex flex-col gap-2 w-[calc(100%-1rem)]">
+                                  {/* Price and Savings Row */}
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {/* Price Circle */}
+                                    {item.price && (
+                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
+                                        <div className="text-center leading-tight text-[8px] sm:text-[10px]">
+                                          {item.price.split(' ').map((part, index) => (
+                                            <div key={index}>
+                                              {part}
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
-                                     {/* Savings Box */}
-                                     {item.discount && (
-                                       <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[60px]">
-                                         <p className="text-[6px] font-bold text-gray-800 leading-tight text-center">
-                                           {item.discount}
-                                         </p>
-                                       </div>
-                                     )}
-                                   </div>
-                                   
-                                   {/* Product Name at bottom, aligned left */}
-                                   <p className="text-xs font-bold text-gray-800 leading-tight text-left line-clamp-2 md:line-clamp-none">
-                                     {item.item}
-                                   </p>
-                                 </div>
+                                    {/* Savings Box */}
+                                    {item.discount && (
+                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[50px] sm:max-w-[60px] flex-shrink-0">
+                                        <p className="text-[7px] sm:text-[8px] font-bold text-gray-800 leading-tight text-center">
+                                          {item.discount}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                  
+                                  {/* Product Name at bottom, aligned left */}
+                                  <p className="text-[10px] sm:text-[12px] font-bold text-gray-800 leading-tight text-left break-words line-clamp-2">
+                                    {item.item}
+                                  </p>
+                                </div>
                               </div>
                             </CardContent>
                           </Card>
@@ -549,8 +637,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                     </CarouselItem>
                   ))}
                 </CarouselContent>
-                <CarouselPrevious className="absolute left-[-8px] top-1/2 -translate-y-1/2" />
-                <CarouselNext className="absolute right-[-8px] top-1/2 -translate-y-1/2" />
+                <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
+                <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
               </div>
               <div className="text-center text-sm text-muted-foreground pt-2">
                 Page {currentPage} of {totalPages}
@@ -572,7 +660,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           setDetailViewItem(null);
           setDetailQuantity(1);
         }}>
-          <DialogContent className="sm:max-w-xl">
+          <DialogContent className="w-[95vw] max-w-2xl">
             <DialogHeader className="relative">
               <DialogTitle>Add to List</DialogTitle>
               {/* Heart Icon */}
@@ -600,33 +688,33 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   e.currentTarget.src = '/placeholder.svg';
                 }}
               />
-                             <div className="w-full px-4 min-w-0">
-                 <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
-                 {detailViewItem.price && (
-                   <div className="mb-4">
-                     <div className="flex items-center justify-center gap-2">
-                       {/* Price Circle */}
-                       <div className="w-32 h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-lg shadow-lg border-2 border-red-600">
-                         <div className="text-center leading-tight">
-                           {detailViewItem.price.split(' ').map((part, index) => (
-                             <div key={index}>
-                               {part}
-                             </div>
-                           ))}
-                         </div>
-                       </div>
-                       
-                       {/* Savings Box */}
-                       {detailViewItem.discount && (
-                         <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[200px]">
-                           <p className="text-sm font-bold text-gray-800 leading-tight text-center">
-                             {detailViewItem.discount}
-                           </p>
-                         </div>
-                       )}
-                     </div>
-                   </div>
-                 )}
+              <div className="w-full px-4 min-w-0">
+                <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
+                {detailViewItem.price && (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-center gap-2 flex-wrap">
+                      {/* Price Circle */}
+                      <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm sm:text-lg shadow-lg border-2 border-red-600 flex-shrink-0">
+                        <div className="text-center leading-tight">
+                          {detailViewItem.price.split(' ').map((part, index) => (
+                            <div key={index}>
+                              {part}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      
+                      {/* Savings Box */}
+                      {detailViewItem.discount && (
+                        <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
+                          <p className="text-xs sm:text-sm font-bold text-gray-800 leading-tight text-center">
+                            {detailViewItem.discount}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
             <div className="flex flex-col items-center gap-4 mt-4">
