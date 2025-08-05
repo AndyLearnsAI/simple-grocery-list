@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3 } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3, Eraser } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -419,7 +419,7 @@ function TouchSortableGroceryItem({
                 onClick={handleQuantityEditToggle}
                 className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
               >
-                <Edit3 className="h-3 w-3" />
+                <Eraser className="h-3 w-3" />
               </Button>
             </div>
           )}
