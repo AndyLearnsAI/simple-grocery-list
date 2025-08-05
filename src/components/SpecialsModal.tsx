@@ -532,7 +532,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[2/3] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[3/4] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
@@ -601,27 +601,27 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                 <div className="absolute bottom-2 left-2 flex flex-col gap-2 w-[calc(100%-1rem)]">
                                   {/* Price and Savings Row */}
                                   <div className="flex items-center gap-1 flex-wrap">
-                                    {/* Price Circle */}
-                                    {item.price && (
-                                      <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
-                                        <div className="text-center leading-tight text-[8px] sm:text-[10px]">
-                                          {item.price.split(' ').map((part, index) => (
-                                            <div key={index}>
-                                              {part}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
+                                                                         {/* Price Circle */}
+                                     {item.price && (
+                                       <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
+                                         <div className="text-center leading-tight text-[12px] sm:text-[14px]">
+                                           {item.price.split(' ').map((part, index) => (
+                                             <div key={index}>
+                                               {part}
+                                             </div>
+                                           ))}
+                                         </div>
+                                       </div>
+                                     )}
 
-                                    {/* Savings Box */}
-                                    {item.discount && (
-                                      <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[50px] sm:max-w-[60px] flex-shrink-0">
-                                        <p className="text-[7px] sm:text-[8px] font-bold text-gray-800 leading-tight text-center">
-                                          {item.discount}
-                                        </p>
-                                      </div>
-                                    )}
+                                     {/* Savings Box */}
+                                     {item.discount && (
+                                       <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[100px] sm:max-w-[120px] flex-shrink-0">
+                                         <p className="text-[10px] sm:text-[12px] font-bold text-gray-800 leading-tight text-center">
+                                           {item.discount}
+                                         </p>
+                                       </div>
+                                     )}
                                   </div>
                                   
                                   {/* Product Name at bottom, aligned left */}
