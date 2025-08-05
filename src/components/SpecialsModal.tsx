@@ -604,7 +604,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                                                          {/* Price Circle */}
                                      {item.price && (
                                        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
-                                         <div className="text-center leading-tight text-[12px] sm:text-[14px]">
+                                         <div className="text-center leading-tight text-[16px] sm:text-[18px]">
                                            {item.price.split(' ').map((part, index) => (
                                              <div key={index}>
                                                {part}
