@@ -90,8 +90,18 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
               <label className="w-1/4 text-sm font-medium">Quantity</label>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 p-0">-</Button>
-                <Input type="number" value={quantity} onChange={(e) => setQuantity(parseInt(e.target.value) || 1)} className="w-16 text-center" />
-                <Button variant="outline" size="sm" onClick={() => setQuantity(q => q + 1)} className="w-8 h-8 p-0">+</Button>
+                <Input 
+                  type="number" 
+                  value={quantity} 
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 1;
+                    setQuantity(Math.max(1, Math.min(99, value)));
+                  }} 
+                  className="w-12 text-center" 
+                  min="1"
+                  max="99"
+                />
+                <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.min(99, q + 1))} className="w-8 h-8 p-0">+</Button>
               </div>
             </div>
             <div className="flex items-center gap-4">

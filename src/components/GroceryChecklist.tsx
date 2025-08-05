@@ -140,8 +140,9 @@ function TouchSortableGroceryItem({
 
   const handleQuantityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value) || 1;
-    setEditQuantity(Math.max(1, value));
-    onUpdateQuantity(item.id, Math.max(1, value) + 10000);
+    const clampedValue = Math.max(1, Math.min(99, value));
+    setEditQuantity(clampedValue);
+    onUpdateQuantity(item.id, clampedValue + 10000);
   };
 
   const calculateDestination = (deltaY: number) => {
@@ -352,8 +353,9 @@ function TouchSortableGroceryItem({
                 type="number"
                 value={editQuantity}
                 onChange={handleQuantityInputChange}
-                className="h-8 w-auto text-sm text-center appearance-none"
+                className="h-8 w-12 text-sm text-center appearance-none"
                 min="1"
+                max="99"
                 style={{ MozAppearance: 'textfield' }}
               />
               <Button

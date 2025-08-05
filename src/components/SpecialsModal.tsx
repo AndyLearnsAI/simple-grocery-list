@@ -326,6 +326,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
         const newOrder = (maxOrderData?.order || 0) + 1;
 
+        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
+
         // Add to saved list
         const { error } = await supabase
           .from('SavedlistItems')
@@ -336,7 +338,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             Quantity: 1, // Add default quantity
             order: newOrder, // Add order
             price: item.price,
-            discount: item.discount
+            discount: item.discount,
+            notes: note
           });
 
         if (error) throw error;

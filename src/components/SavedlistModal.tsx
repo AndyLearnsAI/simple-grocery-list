@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical, ShoppingCart } from "lucide-react";
+import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical, ShoppingCart, Check, Eraser } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -60,11 +60,14 @@ function TouchSortableSavedlistItem({
   const [currentY, setCurrentY] = useState(0);
   const [dragOffset, setDragOffset] = useState(0);
   const [isEditing, setIsEditing] = useState(false);
+  const [isQuantityEditing, setIsQuantityEditing] = useState(false);
   const [editValue, setEditValue] = useState(item.Item);
   const [editError, setEditError] = useState("");
+  const [editQuantity, setEditQuantity] = useState(item.selectedQuantity);
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const editQuantityRef = useRef<HTMLInputElement>(null);
 
   // Validation function
   const validateItemName = (name: string): string => {
@@ -135,6 +138,33 @@ function TouchSortableSavedlistItem({
       e.preventDefault();
       handleEditCancel();
     }
+  };
+
+  const handleQuantityEditToggle = () => {
+    if (isQuantityEditing) {
+      // Save the quantity
+      onUpdateQuantity(item.id, editQuantity - item.selectedQuantity);
+      setIsQuantityEditing(false);
+    } else {
+      // Start editing
+      setEditQuantity(item.selectedQuantity);
+      setIsQuantityEditing(true);
+      setTimeout(() => {
+        editQuantityRef.current?.focus();
+        editQuantityRef.current?.select();
+      }, 0);
+    }
+  };
+
+  const handleQuantityChange = (change: number) => {
+    const newQuantity = Math.max(1, Math.min(99, editQuantity + change));
+    setEditQuantity(newQuantity);
+  };
+
+  const handleQuantityInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = parseInt(e.target.value) || 1;
+    const clampedValue = Math.max(1, Math.min(99, value));
+    setEditQuantity(clampedValue);
   };
 
   const calculateDestination = (deltaY: number) => {
@@ -266,7 +296,7 @@ function TouchSortableSavedlistItem({
           <div
             ref={dragRef}
             className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
-              isEditing ? 'opacity-50 pointer-events-none' : ''
+              isEditing || isQuantityEditing ? 'opacity-50 pointer-events-none' : ''
             }`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -310,53 +340,86 @@ function TouchSortableSavedlistItem({
               </div>
             ) : (
               <div className="flex items-center gap-2 group">
-                <div className="font-medium text-sm break-words flex-1 text-foreground">
+                <div className="font-medium text-sm break-words text-foreground">
                   {item.Item}
                 </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleEditStart}
-                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Edit3 className="h-3 w-3" />
-                </Button>
+                {!isQuantityEditing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditStart}
+                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
+                )}
               </div>
             )}
           </div>
         </div>
         
-        <div className={`flex items-center gap-2 ${isEditing ? 'opacity-50 pointer-events-none' : ''}`}>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, -1)}
-            disabled={item.selectedQuantity <= 0 || isEditing}
-            className="h-8 w-8 p-0"
-          >
-            <Minus className="h-3 w-3" />
-          </Button>
-          <span className="text-sm font-medium min-w-[2rem] text-center">
-            {item.selectedQuantity}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onUpdateQuantity(item.id, 1)}
-            disabled={isEditing}
-            className="h-8 w-8 p-0"
-          >
-            <Plus className="h-3 w-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onRemove(item.id)}
-            disabled={isEditing}
-            className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
+        <div className="flex items-center gap-2">
+          {isQuantityEditing ? (
+            <>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onRemove(item.id)}
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuantityChange(-1)}
+                disabled={editQuantity <= 1}
+                className="h-8 w-8 p-0"
+              >
+                <Minus className="h-3 w-3" />
+              </Button>
+              <Input
+                ref={editQuantityRef}
+                type="number"
+                value={editQuantity}
+                onChange={handleQuantityInputChange}
+                className="h-8 w-12 text-sm text-center appearance-none"
+                min="1"
+                max="99"
+                style={{ MozAppearance: 'textfield' }}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleQuantityChange(1)}
+                className="h-8 w-8 p-0"
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleQuantityEditToggle}
+                className="h-8 w-8 p-0"
+              >
+                <Check className="h-4 w-4 text-green-600" />
+              </Button>
+            </>
+          ) : (
+            <div className="flex items-center gap-2 group">
+              <div className="font-medium text-sm text-muted-foreground">
+                {item.selectedQuantity}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleQuantityEditToggle}
+                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Eraser className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </Card>
