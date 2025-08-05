@@ -39,7 +39,9 @@ function TouchSortableGroceryItem({
   onRemove, 
   onReorder,
   index,
-  totalItems
+  totalItems,
+  dragDestination,
+  onDragDestinationChange
 }: {
   item: GroceryItem;
   onToggle: (id: number) => void;
@@ -48,6 +50,8 @@ function TouchSortableGroceryItem({
   onReorder: (fromIndex: number, toIndex: number) => void;
   index: number;
   totalItems: number;
+  dragDestination: number | null;
+  onDragDestinationChange: (destination: number | null) => void;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStartY, setDragStartY] = useState(0);
@@ -56,12 +60,22 @@ function TouchSortableGroceryItem({
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
 
+  const calculateDestination = (deltaY: number) => {
+    const itemHeight = itemRef.current?.offsetHeight || 80;
+    const positionsMoved = Math.round(deltaY / itemHeight);
+    return Math.max(0, Math.min(totalItems - 1, index + positionsMoved));
+  };
+
   const handleTouchStart = (e: React.TouchEvent) => {
     const touch = e.touches[0];
     setDragStartY(touch.clientY);
     setCurrentY(touch.clientY);
     setIsDragging(true);
     setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    // Prevent default only on the drag handle
+    e.stopPropagation();
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -72,8 +86,14 @@ function TouchSortableGroceryItem({
     setCurrentY(touch.clientY);
     setDragOffset(deltaY);
     
-    // Prevent scrolling while dragging
-    e.preventDefault();
+    // Calculate and update destination
+    const newDestination = calculateDestination(deltaY);
+    onDragDestinationChange(newDestination);
+    
+    // Prevent scrolling only when actually dragging
+    if (Math.abs(deltaY) > 10) {
+      e.preventDefault();
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -81,20 +101,16 @@ function TouchSortableGroceryItem({
     
     const touch = e.changedTouches[0];
     const deltaY = touch.clientY - dragStartY;
-    const itemHeight = itemRef.current?.offsetHeight || 80;
-    const threshold = itemHeight / 2;
     
     setIsDragging(false);
     setDragOffset(0);
+    onDragDestinationChange(null);
     
-    // Calculate new position
-    if (Math.abs(deltaY) > threshold) {
-      const direction = deltaY > 0 ? 1 : -1;
-      const newIndex = Math.max(0, Math.min(totalItems - 1, index + direction));
-      
-      if (newIndex !== index) {
-        onReorder(index, newIndex);
-      }
+    // Calculate target position based on drag distance
+    const newIndex = calculateDestination(deltaY);
+    
+    if (newIndex !== index) {
+      onReorder(index, newIndex);
     }
   };
 
@@ -105,6 +121,9 @@ function TouchSortableGroceryItem({
     setCurrentY(e.clientY);
     setIsDragging(true);
     setDragOffset(0);
+    onDragDestinationChange(null);
+    
+    e.stopPropagation();
   };
 
   const handleMouseMove = (e: MouseEvent) => {
@@ -113,26 +132,26 @@ function TouchSortableGroceryItem({
     const deltaY = e.clientY - dragStartY;
     setCurrentY(e.clientY);
     setDragOffset(deltaY);
+    
+    // Calculate and update destination
+    const newDestination = calculateDestination(deltaY);
+    onDragDestinationChange(newDestination);
   };
 
   const handleMouseUp = (e: MouseEvent) => {
     if (!isDragging) return;
     
     const deltaY = e.clientY - dragStartY;
-    const itemHeight = itemRef.current?.offsetHeight || 80;
-    const threshold = itemHeight / 2;
     
     setIsDragging(false);
     setDragOffset(0);
+    onDragDestinationChange(null);
     
-    // Calculate new position
-    if (Math.abs(deltaY) > threshold) {
-      const direction = deltaY > 0 ? 1 : -1;
-      const newIndex = Math.max(0, Math.min(totalItems - 1, index + direction));
-      
-      if (newIndex !== index) {
-        onReorder(index, newIndex);
-      }
+    // Calculate target position based on drag distance
+    const newIndex = calculateDestination(deltaY);
+    
+    if (newIndex !== index) {
+      onReorder(index, newIndex);
     }
   };
 
@@ -151,16 +170,32 @@ function TouchSortableGroceryItem({
   return (
     <Card 
       ref={itemRef}
-      className={`p-4 shadow-card transition-all duration-300 hover:shadow-elegant relative overflow-hidden ${
-        isDragging ? 'bg-green-50 border-green-200 shadow-lg scale-105' : ''
+      className={`p-4 shadow-card transition-all duration-150 hover:shadow-elegant relative overflow-hidden ${
+        isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
+      } ${
+        dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
       }`}
       style={{
-        transform: isDragging ? `translateY(${dragOffset}px)` : 'none',
+        transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
+        transition: isDragging ? 'none' : 'all 150ms ease-out',
       }}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3 flex-1">
+          {/* Drag Handle */}
+          <div
+            ref={dragRef}
+            className="h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onMouseDown={handleMouseDown}
+            style={{ touchAction: 'none' }}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+          
           <Button
             variant="ghost"
             size="sm"
@@ -173,18 +208,6 @@ function TouchSortableGroceryItem({
           >
             {item.checked && <Check className="h-3 w-3" />}
           </Button>
-          
-          {/* Drag Handle */}
-          <div
-            ref={dragRef}
-            className="h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-          >
-            <GripVertical className="h-4 w-4 text-muted-foreground" />
-          </div>
           
           {item.img && (
             <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
@@ -253,6 +276,7 @@ export function GroceryChecklist() {
   }>({ isOpen: false, item: null, actionType: 'purchase' });
   const [savedlistModalOpen, setSavedlistModalOpen] = useState(false);
   const [specialsModalOpen, setSpecialsModalOpen] = useState(false);
+  const [dragDestination, setDragDestination] = useState<number | null>(null);
   const { toast } = useToast();
 
   // Fetch items from Supabase
@@ -1232,9 +1256,13 @@ export function GroceryChecklist() {
                 onToggle={toggleItem}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
-                onReorder={reorderItems} // This will be updated by the new component
+                onReorder={reorderItems}
                 index={index}
                 totalItems={items.length}
+                dragDestination={dragDestination}
+                onDragDestinationChange={(destination) => {
+                  setDragDestination(destination);
+                }}
               />
             ))}
 
