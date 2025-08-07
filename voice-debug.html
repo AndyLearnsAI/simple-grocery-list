@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Recognition Debug</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .warning {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <h1>Voice Recognition Debug</h1>
+    
+    <div class="debug-section">
+        <h3>Browser Support Check</h3>
+        <div id="browserSupport" class="status"></div>
+    </div>
+
+    <div class="debug-section">
+        <h3>HTTPS Check</h3>
+        <div id="httpsCheck" class="status"></div>
+    </div>
+
+    <div class="debug-section">
+        <h3>Microphone Permission Check</h3>
+        <button onclick="checkMicrophonePermission()">Check Microphone Permission</button>
+        <div id="microphoneCheck" class="status"></div>
+    </div>
+
+    <div class="debug-section">
+        <h3>Voice Recognition Test</h3>
+        <button onclick="startVoiceTest()">Start Voice Recognition</button>
+        <button onclick="stopVoiceTest()">Stop Voice Recognition</button>
+        <div id="voiceTest" class="status"></div>
+        <div id="transcript" class="status info"></div>
+    </div>
+
+    <script>
+        let recognition = null;
+
+        // Check browser support
+        function checkBrowserSupport() {
+            const supportDiv = document.getElementById('browserSupport');
+            const isSupported = 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window;
+            
+            if (isSupported) {
+                supportDiv.className = 'status success';
+                supportDiv.textContent = '✅ Speech recognition is supported in this browser';
+            } else {
+                supportDiv.className = 'status error';
+                supportDiv.textContent = '❌ Speech recognition is NOT supported in this browser';
+            }
+        }
+
+        // Check HTTPS
+        function checkHTTPS() {
+            const httpsDiv = document.getElementById('httpsCheck');
+            const isHTTPS = window.location.protocol === 'https:' || window.location.hostname === 'localhost';
+            
+            if (isHTTPS) {
+                httpsDiv.className = 'status success';
+                httpsDiv.textContent = `✅ HTTPS requirement met (${window.location.protocol}//${window.location.hostname})`;
+            } else {
+                httpsDiv.className = 'status error';
+                httpsDiv.textContent = `❌ HTTPS required for speech recognition. Current: ${window.location.protocol}//${window.location.hostname}`;
+            }
+        }
+
+        // Check microphone permission
+        async function checkMicrophonePermission() {
+            const micDiv = document.getElementById('microphoneCheck');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                micDiv.className = 'status success';
+                micDiv.textContent = '✅ Microphone permission granted';
+                stream.getTracks().forEach(track => track.stop());
+            } catch (error) {
+                micDiv.className = 'status error';
+                micDiv.textContent = `❌ Microphone permission denied: ${error.message}`;
+            }
+        }
+
+        // Voice recognition test
+        function startVoiceTest() {
+            const testDiv = document.getElementById('voiceTest');
+            const transcriptDiv = document.getElementById('transcript');
+            
+            if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+                testDiv.className = 'status error';
+                testDiv.textContent = '❌ Speech recognition not supported';
+                return;
+            }
+
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            recognition = new SpeechRecognition();
+            
+            recognition.continuous = true;
+            recognition.interimResults = true;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                testDiv.className = 'status success';
+                testDiv.textContent = '🎤 Listening... Speak now!';
+            };
+
+            recognition.onresult = (event) => {
+                let finalTranscript = '';
+                let interimTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; i++) {
+                    const transcript = event.results[i][0].transcript;
+                    if (event.results[i].isFinal) {
+                        finalTranscript += transcript + ' ';
+                    } else {
+                        interimTranscript += transcript;
+                    }
+                }
+
+                transcriptDiv.textContent = `Final: ${finalTranscript}\nInterim: ${interimTranscript}`;
+            };
+
+            recognition.onerror = (event) => {
+                testDiv.className = 'status error';
+                testDiv.textContent = `❌ Error: ${event.error}`;
+                console.error('Speech recognition error:', event);
+            };
+
+            recognition.onend = () => {
+                testDiv.className = 'status info';
+                testDiv.textContent = '⏹️ Voice recognition stopped';
+            };
+
+            try {
+                recognition.start();
+            } catch (error) {
+                testDiv.className = 'status error';
+                testDiv.textContent = `❌ Failed to start: ${error.message}`;
+            }
+        }
+
+        function stopVoiceTest() {
+            if (recognition) {
+                recognition.stop();
+            }
+        }
+
+        // Initialize checks
+        checkBrowserSupport();
+        checkHTTPS();
+    </script>
+</body>
+</html> 

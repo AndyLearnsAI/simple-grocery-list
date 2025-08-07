@@ -85,9 +85,9 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart text-gray-400"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.16"/></svg>
             </div>
           )}
-          <div className="w-full space-y-4">
-            <div className="flex items-center gap-4">
-              <label className="w-1/4 text-sm font-medium">Quantity</label>
+          <div className="w-full space-y-2">
+            <div className="flex items-center">
+              <label className="w-1/4 text-sm font-medium pr-2">Quantity</label>
               <div className="flex items-center gap-2">
                 <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 p-0">-</Button>
                 <Input 
@@ -104,17 +104,17 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                 <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.min(99, q + 1))} className="w-8 h-8 p-0">+</Button>
               </div>
             </div>
-            <div className="flex items-center gap-4">
-              <label htmlFor="price" className="w-1/4 text-sm font-medium">Price</label>
-              <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="e.g., 4.99" />
+            <div className="flex items-center">
+              <label htmlFor="price" className="w-1/4 text-sm font-medium pr-2">Price</label>
+              <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} />
             </div>
-            <div className="flex items-center gap-4">
-              <label htmlFor="discount" className="w-1/4 text-sm font-medium">Discount</label>
-              <Input id="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} placeholder="e.g., 2 for 1" />
+            <div className="flex items-center">
+              <label htmlFor="discount" className="w-1/4 text-sm font-medium pr-2">Discount</label>
+              <Input id="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} />
             </div>
-            <div className="flex flex-col gap-2">
-              <label htmlFor="notes" className="text-sm font-medium">Notes</label>
-              <Textarea id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Add a note..." />
+            <div className="flex items-center">
+              <label htmlFor="notes" className="w-1/4 text-sm font-medium pr-2">Notes</label>
+              <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
             </div>
           </div>
         </div>
