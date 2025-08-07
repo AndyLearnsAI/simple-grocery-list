@@ -158,8 +158,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       const { data, error } = await supabase
         .from('specials')
         .select('*')
-        .order('on_special', { ascending: false })
-        .order('item', { ascending: true });
+        .eq('on_special', true)
+        .order('id', { ascending: true });
 
       if (error) throw error;
 
