@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3, Eraser, Bot } from "lucide-react";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3, Eraser } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,9 +11,7 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { VoiceChatbot } from "./VoiceChatbot";
 import { parseSmartSyntax } from "@/lib/utils";
-import type { ProcessedItem } from "@/services/voiceProcessing";
 
 interface GroceryItem {
   id: number;
@@ -422,7 +420,6 @@ export function GroceryChecklist() {
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
   const [detailModalItem, setDetailModalItem] = useState<GroceryItem | null>(null);
-  const [chatbotOpen, setChatbotOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -1064,67 +1061,7 @@ export function GroceryChecklist() {
     fetchItems();
   };
 
-  const handleChatbotItemsAdded = async (items: ProcessedItem[]) => {
-    try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) {
-        toast({
-          title: "Error",
-          description: "You must be logged in to add items.",
-          variant: "destructive",
-        });
-        return;
-      }
 
-      // Get the highest order value to place new items at the end
-      const { data: maxOrderData, error: maxOrderError } = await supabase
-        .from('Grocery list')
-        .select('order')
-        .eq('user_id', user.data.user.id)
-        .order('order', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (maxOrderError && maxOrderError.code !== 'PGRST116') {
-        throw maxOrderError;
-      }
-
-      const baseOrder = (maxOrderData?.order || 0) + 1;
-
-      // Add each item to the grocery list
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        const newOrder = baseOrder + i;
-
-        const { error } = await supabase
-          .from('Grocery list')
-          .insert({
-            Item: item.item,
-            Quantity: item.quantity,
-            user_id: user.data.user.id,
-            order: newOrder,
-            notes: item.notes
-          });
-
-        if (error) throw error;
-      }
-
-      const itemNames = items.map(item => `${item.quantity}x ${item.item}`).join(', ');
-      toast({
-        title: "Items Added",
-        description: `${itemNames} added to your grocery list.`,
-      });
-
-      fetchItems();
-    } catch (error) {
-      console.error('Error adding chatbot items:', error);
-      toast({
-        title: "Error",
-        description: "Failed to add items from voice assistant.",
-        variant: "destructive",
-      });
-    }
-  };
 
   const sortItems = async (sortType: 'newest' | 'oldest' | 'az' | 'za') => {
     setIsSorting(true);
@@ -1236,14 +1173,6 @@ export function GroceryChecklist() {
             <Button onClick={addItem} size="sm">
               <Plus className="h-4 w-4" />
             </Button>
-            <Button 
-              onClick={() => setChatbotOpen(true)}
-              variant="outline"
-              size="sm"
-              className="flex-shrink-0"
-            >
-              <Bot className="h-4 w-4" />
-            </Button>
           </div>
           <div className="flex gap-2">
             <div className="relative flex-1">
@@ -1351,11 +1280,7 @@ export function GroceryChecklist() {
           onUpdate={fetchItems}
         />
       )}
-      <VoiceChatbot
-        isOpen={chatbotOpen}
-        onClose={() => setChatbotOpen(false)}
-        onItemsAdded={handleChatbotItemsAdded}
-      />
+
     </div>
   );
 }
