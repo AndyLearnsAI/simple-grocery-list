@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
 import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, Edit3, Eraser } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
@@ -409,7 +409,15 @@ function TouchSortableGroceryItem({
   );
 }
 
-export function GroceryChecklist() {
+export type GroceryChecklistHandle = {
+  addOrIncreaseByName: (itemName: string, qty: number, note?: string) => Promise<void>;
+  removeByName: (itemName: string) => Promise<void>;
+  adjustQuantityByName: (itemName: string, delta: number) => Promise<void>;
+  undoLastAction: () => Promise<void>;
+  getItemByName: (itemName: string) => { id: number; Item: string; Quantity?: number } | undefined;
+};
+
+export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string, never>>(function GroceryChecklist(_props, ref) {
   const [items, setItems] = useState<GroceryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [newItem, setNewItem] = useState("");
@@ -687,6 +695,95 @@ export function GroceryChecklist() {
       });
     }
   };
+
+  // Expose imperative API for voice assistant and other controllers
+  useImperativeHandle(ref, () => ({
+    addOrIncreaseByName: async (rawName: string, qty: number, note?: string) => {
+      const itemName = rawName.trim();
+      if (!itemName || qty <= 0) return;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error('User not authenticated');
+        const normalizedNewItem = normalizeItemName(itemName);
+        const existingItem = items.find(item => 
+          normalizeItemName(item.Item) === normalizedNewItem
+        );
+        if (existingItem) {
+          const newQuantity = (existingItem.Quantity || 0) + qty;
+          const { error: updateError } = await supabase
+            .from('Grocery list')
+            .update({ Quantity: newQuantity, notes: note ?? existingItem.notes })
+            .eq('id', existingItem.id);
+          if (updateError) throw updateError;
+          setItems(prev => prev.map(i => 
+            i.id === existingItem.id ? { ...i, Quantity: newQuantity, notes: note ?? i.notes } : i
+          ));
+        } else {
+          const { data: minOrderData, error: minOrderError } = await supabase
+            .from('Grocery list')
+            .select('order')
+            .eq('user_id', user.id)
+            .order('order', { ascending: true })
+            .limit(1)
+            .single();
+          if (minOrderError && minOrderError.code !== 'PGRST116') {
+            throw minOrderError;
+          }
+          const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+          const { data, error } = await supabase
+            .from('Grocery list')
+            .insert([
+              {
+                Item: itemName,
+                Quantity: qty,
+                notes: note,
+                user_id: user.id,
+                order: newOrder
+              }
+            ])
+            .select()
+            .single();
+          if (error) throw error;
+          if (data) {
+            const newItemWithChecked = { ...data, checked: false };
+            setItems(prev => [newItemWithChecked, ...prev]);
+          }
+        }
+      } catch (error) {
+        let errorMessage = "Failed to add item to grocery list";
+        if (error instanceof Error) {
+          if (error.message.includes('duplicate key') || error.message.includes('unique constraint')) {
+            errorMessage = "This item already exists in your list. Try updating the quantity instead.";
+          } else if (error.message.includes('user not authenticated')) {
+            errorMessage = "Please sign in to add items to your grocery list.";
+          } else {
+            errorMessage = error.message;
+          }
+        }
+        toast({ title: 'Error adding item', description: errorMessage, variant: 'destructive' });
+      }
+    },
+    removeByName: async (rawName: string) => {
+      const targetName = normalizeItemName(rawName);
+      const item = items.find(i => normalizeItemName(i.Item) === targetName);
+      if (!item) return;
+      await processDelete(item, item.Quantity || 1);
+    },
+    adjustQuantityByName: async (rawName: string, delta: number) => {
+      const targetName = normalizeItemName(rawName);
+      const item = items.find(i => normalizeItemName(i.Item) === targetName);
+      if (!item) return;
+      await updateQuantity(item.id, delta);
+    },
+    undoLastAction: async () => {
+      await undoDelete();
+    },
+    getItemByName: (rawName: string) => {
+      const targetName = normalizeItemName(rawName);
+      const item = items.find(i => normalizeItemName(i.Item) === targetName);
+      return item ? { id: item.id, Item: item.Item, Quantity: item.Quantity } : undefined;
+    }
+  }), [items]);
 
   const removeItem = async (id: number) => {
     const item = items.find(i => i.id === id);
@@ -1283,4 +1380,4 @@ export function GroceryChecklist() {
 
     </div>
   );
-}
+});

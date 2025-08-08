@@ -6,12 +6,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { GroceryChecklist } from "@/components/GroceryChecklist";
+import { GroceryChecklist, type GroceryChecklistHandle } from "@/components/GroceryChecklist";
 import { PurchaseHistory } from "@/components/PurchaseHistory";
 import { ShoppingCart, LogOut, History, AlertTriangle } from "lucide-react";
+import { useRef } from "react";
+import { VoiceAssistant } from "@/components/VoiceAssistant";
 
 const Index = () => {
   const navigate = useNavigate();
+  const checklistRef = useRef<GroceryChecklistHandle>(null);
   const [activeTab, setActiveTab] = useState("grocery-list");
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -121,7 +124,7 @@ const Index = () => {
           {/* Tab Content */}
           <TabsContent value="grocery-list" className="space-y-0">
             <div className="animate-fade-in">
-              <GroceryChecklist />
+              <GroceryChecklist ref={checklistRef} />
             </div>
           </TabsContent>
 
@@ -131,6 +134,7 @@ const Index = () => {
             </div>
           </TabsContent>
         </Tabs>
+        <VoiceAssistant checklistRef={checklistRef} />
         <div className="mt-6 flex justify-center">
             <Button
               variant="ghost"
