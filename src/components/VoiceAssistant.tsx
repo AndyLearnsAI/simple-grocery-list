@@ -25,14 +25,13 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  const openChatAndListen = () => {
+  const openChat = () => {
     if (!isSupported) return;
     setChatOpen(true);
     reset();
     setPlan(null);
     // Show an initial assistant hint only if chat is empty
     setMessages((prev) => (prev.length ? prev : [{ role: "assistant", content: "I’m listening. Say things like ‘add two apples and milk’, or ‘remove avocados’. Tap Done when finished.", kind: "text" }]));
-    start();
   };
 
   const stopAndSummarize = async () => {
@@ -123,7 +122,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     <div className="fixed right-4 bottom-24 sm:bottom-6 z-50 flex flex-col items-end gap-2">
       <Button
         size="icon"
-        onClick={openChatAndListen}
+        onClick={openChat}
         className="relative w-12 h-12 rounded-full"
         title={isSupported ? "Start voice" : "Voice unsupported"}
         disabled={!isSupported}
@@ -134,12 +133,12 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
 
       {/* Voice Chat Dialog */}
       <Dialog open={chatOpen} onOpenChange={(o) => { if (!o) { setChatOpen(false); } }}>
-        <DialogContent aria-describedby="va-desc" className="w-[95vw] max-w-lg h-[80vh] p-0 flex flex-col overflow-hidden">
+        <DialogContent aria-describedby="va-desc" className="w-[95vw] max-w-lg max-h-[85vh] p-0 flex flex-col overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2">
             <DialogTitle>Voice Assistant</DialogTitle>
           </DialogHeader>
           <span id="va-desc" className="sr-only">Speak to add or remove items. After processing, you can accept to apply changes.</span>
-          <div className="flex-1 overflow-y-auto px-4 space-y-3">
+          <div className="px-4 space-y-3 overflow-y-auto">
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`whitespace-pre-wrap max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-card ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
@@ -168,8 +167,8 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 <span className="absolute -z-10 inset-0 rounded-md animate-ping bg-red-500/20" />
               </Button>
             ) : (
-              <Button onClick={openChatAndListen} title="Speak again">
-                <Mic className="w-4 h-4 mr-2" /> Speak
+              <Button onClick={start} title="Start" className="bg-green-600 hover:bg-green-700 text-white">
+                <Mic className="w-4 h-4 mr-2" /> Start
               </Button>
             )}
             {/* Accept/Cancel when a plan is present */}
