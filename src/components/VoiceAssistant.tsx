@@ -13,35 +13,93 @@ type VoiceAssistantProps = {
 
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const { state, interimTranscript, finalTranscript, start, stop, reset, isSupported } = useSpeechRecognition();
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [plan, setPlan] = useState<ParsedPlan | null>(null);
   const [executing, setExecuting] = useState(false);
-  const lastAcceptedPlanRef = useRef<ParsedPlan | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   const displayTranscript = useMemo(() => {
     return [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
   }, [finalTranscript, interimTranscript]);
 
-  const onMic = () => {
+  type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" };
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+
+  const openChatAndListen = () => {
     if (!isSupported) return;
+    setChatOpen(true);
     reset();
+    setPlan(null);
+    // Show an initial assistant hint only if chat is empty
+    setMessages((prev) => (prev.length ? prev : [{ role: "assistant", content: "I’m listening. Say things like ‘add two apples and milk’, or ‘remove avocados’. Tap Done when finished.", kind: "text" }]));
     start();
   };
 
-  const onDone = () => {
+  const stopAndSummarize = async () => {
     stop();
-    // If we already have some transcript, go straight to confirm
     const text = displayTranscript.trim();
-    if (text) {
-      const p = parseVoiceToPlan(text);
-      setPlan(p);
-      setConfirmOpen(true);
+    if (!text) return;
+    setMessages((prev) => [...prev, { role: "user", content: text }]);
+
+    // Always use LLM. No fallback.
+    setProcessing(true);
+    // provisional assistant bubble
+    setMessages((prev) => [...prev, { role: 'assistant', content: 'Processing with AI…' }]);
+    try {
+      const base = import.meta.env.VITE_API_BASE_URL || '';
+      const res = await fetch(`${base}/api/voice-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transcript: text }),
+      });
+      setProcessing(false);
+      if (res.ok) {
+        const data = await res.json();
+        const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw: text } : { add: [], remove: [], adjust: [], raw: text });
+        setPlan(llmPlan);
+        const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
+        setMessages((prev) => {
+          const copy = [...prev];
+          // replace last assistant bubble if it was the processing one
+          copy[copy.length - 1] = { role: 'assistant', content: summary, kind: 'plan' };
+          return copy;
+        });
+        return;
+      }
+      const err = await res.text();
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+        return copy;
+      });
+    } catch (e) {
+      setProcessing(false);
+      setMessages((prev) => {
+        const copy = [...prev];
+        copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+        return copy;
+      });
     }
   };
 
-  const onCancel = () => {
-    setConfirmOpen(false);
-    setPlan(null);
+  const buildPlanSummary = (p: ParsedPlan) => {
+    const lines: string[] = [];
+    if (p.add.length) {
+      lines.push("Add:");
+      for (const i of p.add) {
+        lines.push(`- ${(i.quantity ?? 1)} × ${i.name}${i.note ? ` (${i.note})` : ''}`);
+      }
+    }
+    if (p.remove.length) {
+      lines.push("Remove:");
+      for (const i of p.remove) lines.push(`- ${i.name}`);
+    }
+    if (p.adjust.length) {
+      lines.push("Adjust:");
+      for (const i of p.adjust) lines.push(`- ${i.delta > 0 ? `+${i.delta}` : i.delta} ${i.name}`);
+    }
+    if (!lines.length) return "I didn’t detect anything to change.";
+    return lines.join("\n");
   };
 
   const executePlan = async () => {
@@ -50,115 +108,87 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     if (!api) return;
     setExecuting(true);
     try {
-      // Adjust → Remove → Add
-      for (const adj of plan.adjust) {
-        await api.adjustQuantityByName(adj.name, adj.delta);
-      }
-      for (const rem of plan.remove) {
-        await api.removeByName(rem.name);
-      }
-      for (const add of plan.add) {
-        await api.addOrIncreaseByName(add.name, add.quantity ?? 1, add.note);
-      }
-      lastAcceptedPlanRef.current = plan;
-      setConfirmOpen(false);
+      for (const adj of plan.adjust) await api.adjustQuantityByName(adj.name, adj.delta);
+      for (const rem of plan.remove) await api.removeByName(rem.name);
+      for (const add of plan.add) await api.addOrIncreaseByName(add.name, add.quantity ?? 1, add.note);
+      setMessages((prev) => [...prev, { role: "assistant", content: "Applied your changes." }]);
       setPlan(null);
     } finally {
       setExecuting(false);
     }
   };
 
-  // Floating mic UI
+  // Floating mic launcher
   return (
     <div className="fixed right-4 bottom-24 sm:bottom-6 z-50 flex flex-col items-end gap-2">
-      <div className="flex items-center gap-2">
-        {state === "listening" && (
-          <div className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs">Listening…</div>
-        )}
-        {state === "listening" ? (
-          <Button
-            size="icon"
-            variant="destructive"
-            onClick={onDone}
-            className="relative w-12 h-12 rounded-full"
-            title="Done"
-          >
-            <Square className="w-5 h-5" />
-            <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30" />
-          </Button>
-        ) : (
-          <Button
-            size="icon"
-            onClick={onMic}
-            className="relative w-12 h-12 rounded-full"
-            title={isSupported ? "Start voice" : "Voice unsupported"}
-            disabled={!isSupported}
-          >
-            <Mic className="w-5 h-5" />
-            {isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
-          </Button>
-        )}
-      </div>
+      <Button
+        size="icon"
+        onClick={openChatAndListen}
+        className="relative w-12 h-12 rounded-full"
+        title={isSupported ? "Start voice" : "Voice unsupported"}
+        disabled={!isSupported}
+      >
+        <Mic className="w-5 h-5" />
+        {isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
+      </Button>
 
-      {/* Mini live transcript when listening */}
-      {state === "listening" && (
-        <Card className="max-w-[80vw] sm:max-w-sm p-2 shadow-card">
-          <div className="text-xs text-muted-foreground line-clamp-3">
-            {displayTranscript || "Say something like: add two apples and milk"}
-          </div>
-        </Card>
-      )}
-
-      {/* Confirmation dialog */}
-      <Dialog open={confirmOpen} onOpenChange={(o) => !executing && setConfirmOpen(o)}>
-        <DialogContent className="w-[95vw] max-w-md">
-          <DialogHeader>
-            <DialogTitle>Confirm Voice Actions</DialogTitle>
+      {/* Voice Chat Dialog */}
+      <Dialog open={chatOpen} onOpenChange={(o) => { if (!o) { setChatOpen(false); } }}>
+        <DialogContent aria-describedby="va-desc" className="w-[95vw] max-w-lg h-[80vh] p-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle>Voice Assistant</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 text-sm">
-            <div className="text-xs text-muted-foreground">“{plan?.raw || displayTranscript}”</div>
-            {(plan?.add?.length ?? 0) > 0 && (
-              <div>
-                <div className="font-medium mb-1">Add</div>
-                <ul className="list-disc pl-5 space-y-1">
-                  {plan!.add.map((i, idx) => (
-                    <li key={idx}>{(i.quantity ?? 1)} × {i.name}{i.note ? ` (${i.note})` : ''}</li>
-                  ))}
-                </ul>
+          <span id="va-desc" className="sr-only">Speak to add or remove items. After processing, you can accept to apply changes.</span>
+          <div className="flex-1 overflow-y-auto px-4 space-y-3">
+            {messages.map((m, idx) => (
+              <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                <div className={`whitespace-pre-wrap max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-card ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
+                  {m.content}
+                </div>
               </div>
-            )}
-            {(plan?.remove?.length ?? 0) > 0 && (
-              <div>
-                <div className="font-medium mb-1">Remove</div>
-                <ul className="list-disc pl-5 space-y-1">
-                  {plan!.remove.map((i, idx) => (
-                    <li key={idx}>{i.name}</li>
-                  ))}
-                </ul>
+            ))}
+            {/* Live composing bubble */}
+            {state === "listening" && (
+              <div className="flex justify-end">
+                <div className="max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-card bg-primary text-primary-foreground">
+                  {displayTranscript || "Listening…"}
+                </div>
               </div>
-            )}
-            {(plan?.adjust?.length ?? 0) > 0 && (
-              <div>
-                <div className="font-medium mb-1">Adjust</div>
-                <ul className="list-disc pl-5 space-y-1">
-                  {plan!.adjust.map((i, idx) => (
-                    <li key={idx}>{i.delta > 0 ? `+${i.delta}` : i.delta} {i.name}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {plan && plan.add.length === 0 && plan.remove.length === 0 && plan.adjust.length === 0 && (
-              <div className="text-muted-foreground">No actionable items detected.</div>
             )}
           </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={executing}>
-              <X className="w-4 h-4 mr-1" /> Cancel
-            </Button>
-            <Button onClick={executePlan} disabled={executing || !plan || (plan.add.length===0 && plan.remove.length===0 && plan.adjust.length===0)}>
-              <Check className="w-4 h-4 mr-1" /> Accept
-            </Button>
-          </DialogFooter>
+          <div className="border-t p-3 flex items-center gap-2">
+            {state === "listening" ? (
+              <Button
+                onClick={stopAndSummarize}
+                variant="destructive"
+                className="relative"
+                title="Done"
+              >
+                <Square className="w-4 h-4 mr-2" /> Done
+                <span className="absolute -z-10 inset-0 rounded-md animate-ping bg-red-500/20" />
+              </Button>
+            ) : (
+              <Button onClick={openChatAndListen} title="Speak again">
+                <Mic className="w-4 h-4 mr-2" /> Speak
+              </Button>
+            )}
+            {/* Accept/Cancel when a plan is present */}
+            {plan && (
+              <div className="ml-auto flex items-center gap-2">
+                <Button variant="outline" onClick={() => setPlan(null)} disabled={executing}>
+                  <X className="w-4 h-4 mr-1" /> Cancel
+                </Button>
+                <Button onClick={executePlan} disabled={executing}>
+                  <Check className="w-4 h-4 mr-1" /> Accept
+                </Button>
+              </div>
+            )}
+            {!plan && (state !== 'listening') && (
+              <div className="ml-auto text-xs text-muted-foreground">
+                {processing ? 'Processing…' : ''}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

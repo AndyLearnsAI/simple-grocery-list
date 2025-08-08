@@ -9,6 +9,7 @@ export function useSpeechRecognition() {
   const [error, setError] = useState<string | null>(null);
 
   const recognitionRef = useRef<any>(null);
+  const accumulatedFinalRef = useRef("");
   const manuallyStoppedRef = useRef(false);
   const activeRef = useRef(false);
   const retryCountRef = useRef(0);
@@ -34,6 +35,7 @@ export function useSpeechRecognition() {
     }
     setInterimTranscript("");
     setFinalTranscript("");
+    accumulatedFinalRef.current = "";
     setError(null);
     manuallyStoppedRef.current = false;
     activeRef.current = true;
@@ -41,17 +43,16 @@ export function useSpeechRecognition() {
 
     rec.onresult = (event: any) => {
       let interim = "";
-      let finalText = finalTranscript;
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalText += (finalText ? " " : "") + transcript;
+          accumulatedFinalRef.current = (accumulatedFinalRef.current ? accumulatedFinalRef.current + " " : "") + transcript;
         } else {
           interim += transcript;
         }
       }
       setInterimTranscript(interim);
-      setFinalTranscript(finalText);
+      setFinalTranscript(accumulatedFinalRef.current);
     };
 
     rec.onerror = (e: any) => {
@@ -69,13 +70,11 @@ export function useSpeechRecognition() {
 
     rec.onend = () => {
       if (activeRef.current && !manuallyStoppedRef.current) {
-        // Auto-restart a few times to keep session alive
-        if (retryCountRef.current < 3) {
-          retryCountRef.current += 1;
-          try { rec.start(); } catch {}
-          setState("listening");
-          return;
-        }
+        // Auto-restart indefinitely until user taps Done
+        retryCountRef.current += 1;
+        try { rec.start(); } catch {}
+        setState("listening");
+        return;
       }
       setState((prev) => (prev === "listening" ? "stopped" : prev));
       activeRef.current = false;

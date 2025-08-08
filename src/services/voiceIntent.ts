@@ -60,38 +60,52 @@ export function parseVoiceToPlan(textRaw: string): ParsedPlan {
   }
 
   // Add patterns (default)
-  const itemsText = lower.replace(/^(add|put|insert|i need|i want|get)\s+/, "");
+  const itemsText = lower.replace(/^(add|put|insert|i need|i want|get|please add|can you add)\s+/, "");
   const phrases = splitItems(itemsText);
   for (const p of phrases) {
-    const tokens = p.split(/\s+/);
-    let quantity: number | undefined;
-    let note: string | undefined;
+    const tokens = p.split(/\s+/).filter(Boolean);
+    // Scan for repeating segments of [qty] [name tokens until next qty]
+    let i = 0;
+    let currentQty: number | undefined = undefined;
+    let nameBuffer: string[] = [];
 
-    // Quantity early
-    const maybeQty = parseQuantity(tokens[0]);
-    if (maybeQty) {
-      quantity = maybeQty;
-      // Optional unit after quantity, drop it if present
-      if (tokens[1] && UNITS.includes(tokens[1])) {
-        tokens.splice(0, 2);
-      } else {
-        tokens.splice(0, 1);
+    const flush = () => {
+      const rawName = nameBuffer.join(" ").replace(/\b(of|some)\b\s*/g, "").trim();
+      if (!rawName) return;
+      // Handle note in parentheses
+      const noteMatch = rawName.match(/^(.*)\((.*)\)\s*$/);
+      let name = rawName;
+      let note: string | undefined;
+      if (noteMatch) {
+        name = noteMatch[1].trim();
+        note = noteMatch[2].trim();
       }
-    }
+      plan.add.push({ name, quantity: currentQty, note });
+      nameBuffer = [];
+      currentQty = undefined;
+    };
 
-    const joined = tokens.join(" ");
-    // Note in parentheses e.g., apples (ripe)
-    const noteMatch = joined.match(/^(.*)\((.*)\)\s*$/);
-    let name: string;
-    if (noteMatch) {
-      name = noteMatch[1].trim();
-      const n = noteMatch[2].trim();
-      if (n) note = n;
-    } else {
-      name = joined;
+    while (i < tokens.length) {
+      const t = tokens[i];
+      const qty = parseQuantity(t);
+      if (qty) {
+        // If we already accumulated a name, flush before starting next group
+        if (nameBuffer.length) flush();
+        currentQty = qty;
+        // Optional unit after qty
+        if (tokens[i + 1] && UNITS.includes(tokens[i + 1])) {
+          i += 2;
+          continue;
+        }
+        i += 1;
+        continue;
+      }
+      // Ignore filler words
+      if (/^(and|also|please|hey|can|you|to|the)$/.test(t)) { i += 1; continue; }
+      nameBuffer.push(t);
+      i += 1;
     }
-    name = name.replace(/\b(of|some)\b\s*/g, "").trim();
-    if (name) plan.add.push({ name, quantity, note });
+    if (nameBuffer.length) flush();
   }
 
   return plan;
