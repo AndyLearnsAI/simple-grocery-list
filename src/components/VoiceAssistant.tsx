@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { parseVoiceToPlan, type ParsedPlan } from "@/services/voiceIntent";
 import type { GroceryChecklistHandle } from "@/components/GroceryChecklist";
 
@@ -13,6 +14,8 @@ type VoiceAssistantProps = {
 
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const { state, interimTranscript, finalTranscript, start, stop, reset, isSupported } = useSpeechRecognition();
+  const recorder = useAudioRecorder();
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [chatOpen, setChatOpen] = useState(false);
   const [plan, setPlan] = useState<ParsedPlan | null>(null);
   const [executing, setExecuting] = useState(false);
@@ -35,6 +38,52 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   };
 
   const stopAndSummarize = async () => {
+    if (isMobile) {
+      const blob = await recorder.stop();
+      if (!blob) {
+        setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
+        return;
+      }
+      setProcessing(true);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Processing with AI…' }]);
+      try {
+        const base = import.meta.env.VITE_API_BASE_URL || '';
+        const fd = new FormData();
+        fd.append('audio', blob, 'voice.webm');
+        const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
+        setProcessing(false);
+        if (res.ok) {
+          const data = await res.json();
+          const raw = data?.transcript || '';
+          if (raw) setMessages((prev) => [{ role: 'user', content: raw }, ...prev.filter(() => true)]);
+          const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
+          setPlan(llmPlan);
+          const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
+          setMessages((prev) => {
+            const copy = [...prev];
+            copy[copy.length - 1] = { role: 'assistant', content: summary, kind: 'plan' };
+            return copy;
+          });
+          return;
+        }
+        const err = await res.text();
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+          return copy;
+        });
+      } catch (e) {
+        setProcessing(false);
+        setMessages((prev) => {
+          const copy = [...prev];
+          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+          return copy;
+        });
+      }
+      return;
+    }
+
+    // Desktop: use SpeechRecognition transcript
     stop();
     const text = displayTranscript.trim();
     if (!text) return;
@@ -156,7 +205,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
             )}
           </div>
           <div className="border-t p-3 flex items-center gap-2">
-            {state === "listening" ? (
+            {(isMobile ? recorder.state === 'recording' : state === "listening") ? (
               <Button
                 onClick={stopAndSummarize}
                 variant="destructive"
@@ -167,7 +216,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 <span className="absolute -z-10 inset-0 rounded-md animate-ping bg-red-500/20" />
               </Button>
             ) : (
-              <Button onClick={start} title="Start" className="bg-green-600 hover:bg-green-700 text-white">
+              <Button onClick={() => (isMobile ? recorder.start() : start())} title="Start" className="bg-green-600 hover:bg-green-700 text-white">
                 <Mic className="w-4 h-4 mr-2" /> Start
               </Button>
             )}
