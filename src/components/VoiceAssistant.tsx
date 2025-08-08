@@ -25,7 +25,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     return [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
   }, [finalTranscript, interimTranscript]);
 
-  type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" };
+  type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" | "spinner" };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const openChat = () => {
@@ -45,7 +45,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
         return;
       }
       setProcessing(true);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Processing with AI…' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
       try {
         const base = import.meta.env.VITE_API_BASE_URL || '';
         const fd = new FormData();
@@ -57,11 +57,11 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
           const raw = data?.transcript || '';
           const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
           setPlan(llmPlan);
-          const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
+          const summary = buildPlanSummary(llmPlan);
           setMessages((prev) => {
             const copy = [...prev];
             // remove the last assistant processing bubble
-            if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.content.includes('Processing')) {
+            if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.kind === 'spinner') {
               copy.pop();
             }
             if (raw) copy.push({ role: 'user', content: raw });
@@ -91,7 +91,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     stop();
     const text = displayTranscript.trim();
     if (!text) return;
-    setMessages((prev) => [...prev, { role: "user", content: text }]);
+    setMessages((prev) => [...prev, { role: "user", content: text }, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
 
     // Always use LLM. No fallback.
     setProcessing(true);
@@ -194,8 +194,8 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
           <div className="px-4 space-y-3 overflow-y-auto">
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`whitespace-pre-wrap max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-card ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground'}`}>
-                  {m.content}
+                <div className={`whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-card ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-green-50 text-green-900 border border-green-200'}`}>
+                  <span dangerouslySetInnerHTML={{ __html: m.content }} />
                 </div>
               </div>
             ))}
