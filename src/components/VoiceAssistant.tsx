@@ -55,13 +55,17 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
         if (res.ok) {
           const data = await res.json();
           const raw = data?.transcript || '';
-          if (raw) setMessages((prev) => [{ role: 'user', content: raw }, ...prev.filter(() => true)]);
           const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
           setPlan(llmPlan);
           const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
           setMessages((prev) => {
             const copy = [...prev];
-            copy[copy.length - 1] = { role: 'assistant', content: summary, kind: 'plan' };
+            // remove the last assistant processing bubble
+            if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.content.includes('Processing')) {
+              copy.pop();
+            }
+            if (raw) copy.push({ role: 'user', content: raw });
+            copy.push({ role: 'assistant', content: summary, kind: 'plan' });
             return copy;
           });
           return;
