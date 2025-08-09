@@ -119,6 +119,8 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
       for (const rem of plan.remove) await api.removeByName(rem.name);
       for (const add of plan.add) await api.addOrIncreaseByName(add.name, add.quantity ?? 1, add.note);
       setMessages((prev) => [...prev, { role: "assistant", content: "Applied your changes." }]);
+      // Close the dialog after 2 seconds
+      setTimeout(() => setChatOpen(false), 2000);
       setPlan(null);
     } finally {
       setExecuting(false);
@@ -149,15 +151,28 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
           <div className="px-4 space-y-4 overflow-y-auto">
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white text-black border border-black`}>
+                <div
+                  className={`whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
+                    m.role === 'user'
+                      ? 'bg-green-600 text-white border border-green-700'
+                      : 'bg-white text-black border border-black'
+                  }`}
+                >
                   <span dangerouslySetInnerHTML={{ __html: m.content }} />
                   {m.kind === 'plan' && (
                     <div className="mt-3 flex gap-2">
-                      <Button variant="outline" onClick={() => setPlan(null)} disabled={executing}>
-                        <X className="w-4 h-4 mr-1" /> Cancel
-                      </Button>
                       <Button onClick={executePlan} disabled={executing}>
                         <Check className="w-4 h-4 mr-1" /> Accept
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setPlan(null);
+                          setTimeout(() => setChatOpen(false), 2000);
+                        }}
+                        disabled={executing}
+                      >
+                        <X className="w-4 h-4 mr-1" /> Cancel
                       </Button>
                     </div>
                   )}
