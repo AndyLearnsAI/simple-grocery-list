@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { X, Plus, Minus, Check, Heart } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const [detailNotes, setDetailNotes] = useState("");
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   const [savedItems, setSavedItems] = useState<Set<number>>(new Set());
+  const notesTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const [isNotesFocused, setIsNotesFocused] = useState(false);
 
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -669,9 +671,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           setDetailViewItem(null);
           setDetailQuantity(1);
         }}>
-          <DialogContent className="w-[95vw] max-w-2xl">
+          <DialogContent className={`w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto ${isMobile && isNotesFocused ? 'pb-32' : ''}`}>
             <DialogHeader className="relative">
-              <DialogTitle>Add to List</DialogTitle>
+              <DialogTitle>{detailViewItem.item}</DialogTitle>
               {/* Heart Icon */}
               <Button
                 size="sm"
@@ -698,7 +700,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 }}
               />
               <div className="w-full px-4 min-w-0">
-                <h3 className="font-semibold text-base mb-2 leading-tight break-words whitespace-normal text-center min-w-0">{detailViewItem.item}</h3>
                 {detailViewItem.price && (
                   <div className="mb-4">
                     <div className="flex items-center justify-center gap-2 flex-wrap">
@@ -766,6 +767,15 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   placeholder="Add a note to save with this item"
                   value={detailNotes}
                   onChange={(e) => setDetailNotes(e.target.value)}
+                  ref={notesTextareaRef}
+                  onFocus={() => {
+                    // Allow the dialog to scroll and center the notes when keyboard opens
+                    setIsNotesFocused(true);
+                    setTimeout(() => {
+                      notesTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 50);
+                  }}
+                  onBlur={() => setIsNotesFocused(false)}
                 />
               </div>
               
