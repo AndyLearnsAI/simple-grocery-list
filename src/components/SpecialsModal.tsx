@@ -554,7 +554,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                             className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[4/5] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                              className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[5/6] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">

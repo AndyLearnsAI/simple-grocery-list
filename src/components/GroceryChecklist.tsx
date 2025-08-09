@@ -1136,7 +1136,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
 
   return (
     <div className="space-y-4">
-      <Card className="p-4 shadow-card">
+      <Card className="px-0 py-4 shadow-card">
         <div className="space-y-4">
           <div className="flex gap-2">
             <Input
@@ -1214,7 +1214,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
           </div>
         </div>
       </Card>
-      <Card className="p-4 shadow-card">
+      <Card className="px-0 py-4 shadow-card">
         <div className="space-y-3">
           <div className="flex gap-2">
             <Button

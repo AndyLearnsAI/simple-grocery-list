@@ -99,7 +99,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-subtle">
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-6 max-w-2xl">
+      <main className="container mx-auto px-0 py-6 max-w-2xl">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
           {/* Tab Navigation */}
           <TabsList className="grid w-full grid-cols-2 bg-card shadow-card border">
