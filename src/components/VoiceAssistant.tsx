@@ -3,7 +3,6 @@ import { Mic, Square, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
-import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { parseVoiceToPlan, type ParsedPlan } from "@/services/voiceIntent";
 import type { GroceryChecklistHandle } from "@/components/GroceryChecklist";
@@ -13,7 +12,6 @@ type VoiceAssistantProps = {
 };
 
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
-  const { state, interimTranscript, finalTranscript, start, stop, reset, isSupported } = useSpeechRecognition();
   const recorder = useAudioRecorder();
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const [chatOpen, setChatOpen] = useState(false);
@@ -21,114 +19,71 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const [executing, setExecuting] = useState(false);
   const [processing, setProcessing] = useState(false);
 
-  const displayTranscript = useMemo(() => {
-    return [finalTranscript, interimTranscript].filter(Boolean).join(" ").trim();
-  }, [finalTranscript, interimTranscript]);
+  // We no longer live-transcribe; backend handles transcription from recorded audio
+  const displayTranscript = "";
 
   type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" | "spinner" };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const openChat = () => {
-    if (!isSupported) return;
+    if (!recorder.isSupported) return;
     setChatOpen(true);
-    reset();
     setPlan(null);
     // Show an initial assistant hint only if chat is empty
-    setMessages((prev) => (prev.length ? prev : [{ role: "assistant", content: "I’m listening. Say things like ‘add two apples and milk’, or ‘remove avocados’. Tap Done when finished.", kind: "text" }]));
+    setMessages((prev) => (prev.length ? prev : [{ role: "assistant", content: "Tap 'Start' and say what you'd like to do with the grocery list. Tap 'Done' when you're finished talking.", kind: "text" }]));
   };
 
   const stopAndSummarize = async () => {
-    if (isMobile) {
-      const blob = await recorder.stop();
-      if (!blob) {
-        setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
-        return;
-      }
-      setProcessing(true);
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
-      try {
-        const base = import.meta.env.VITE_API_BASE_URL || '';
-        const fd = new FormData();
-        fd.append('audio', blob, 'voice.webm');
-        const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
-        setProcessing(false);
-        if (res.ok) {
-          const data = await res.json();
-          const raw = data?.transcript || '';
-          const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
-          setPlan(llmPlan);
-          const summary = buildPlanSummary(llmPlan);
-          setMessages((prev) => {
-            const copy = [...prev];
-            // remove the last assistant processing bubble
-            if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.kind === 'spinner') {
-              copy.pop();
-            }
-            if (raw) copy.push({ role: 'user', content: raw });
-            copy.push({ role: 'assistant', content: summary, kind: 'plan' });
-            return copy;
-          });
-          return;
-        }
-        const err = await res.text();
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
-          return copy;
-        });
-      } catch (e) {
-        setProcessing(false);
-        setMessages((prev) => {
-          const copy = [...prev];
-          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
-          return copy;
-        });
-      }
+    const blob = await recorder.stop();
+    if (!blob) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
       return;
     }
-
-    // Desktop: use SpeechRecognition transcript
-    stop();
-    const text = displayTranscript.trim();
-    if (!text) return;
-    setMessages((prev) => [...prev, { role: "user", content: text }, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
-
-    // Always use LLM. No fallback.
     setProcessing(true);
-    // provisional assistant bubble
-    setMessages((prev) => [...prev, { role: 'assistant', content: 'Processing with AI…' }]);
+    setMessages((prev) => [...prev, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
     try {
       const base = import.meta.env.VITE_API_BASE_URL || '';
-      const res = await fetch(`${base}/api/voice-intent`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transcript: text }),
-      });
+      const fd = new FormData();
+      fd.append('audio', blob, 'voice.webm');
+      const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
       setProcessing(false);
       if (res.ok) {
         const data = await res.json();
-        const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw: text } : { add: [], remove: [], adjust: [], raw: text });
+        const raw = data?.transcript || '';
+        const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
         setPlan(llmPlan);
         const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
         setMessages((prev) => {
           const copy = [...prev];
-          // replace last assistant bubble if it was the processing one
-          copy[copy.length - 1] = { role: 'assistant', content: summary, kind: 'plan' };
+          // remove/replace the last assistant processing bubble
+          if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.kind === 'spinner') {
+            copy.pop();
+          }
+          if (raw) copy.push({ role: 'user', content: raw });
+          copy.push({ role: 'assistant', content: summary, kind: 'plan' });
           return copy;
         });
         return;
       }
-      const err = await res.text();
+      await res.text();
       setMessages((prev) => {
         const copy = [...prev];
-        copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+        if (copy.length && copy[copy.length - 1]?.kind === 'spinner') {
+          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' } as any;
+        } else {
+          copy.push({ role: 'assistant', content: 'AI not currently available' });
+        }
         return copy;
       });
     } catch (e) {
       setProcessing(false);
       setMessages((prev) => {
         const copy = [...prev];
-        copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' };
+        if (copy.length && copy[copy.length - 1]?.kind === 'spinner') {
+          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' } as any;
+        } else {
+          copy.push({ role: 'assistant', content: 'AI not currently available' });
+        }
         return copy;
       });
     }
@@ -177,11 +132,11 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
         size="icon"
         onClick={openChat}
         className="relative w-12 h-12 rounded-full"
-        title={isSupported ? "Start voice" : "Voice unsupported"}
-        disabled={!isSupported}
+        title={recorder.isSupported ? "Start voice" : "Voice unsupported"}
+        disabled={!recorder.isSupported}
       >
         <Mic className="w-5 h-5" />
-        {isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
+        {recorder.isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
       </Button>
 
       {/* Voice Chat Dialog */}
@@ -191,54 +146,46 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
             <DialogTitle>Voice Assistant</DialogTitle>
           </DialogHeader>
           <span id="va-desc" className="sr-only">Speak to add or remove items. After processing, you can accept to apply changes.</span>
-          <div className="px-4 space-y-3 overflow-y-auto">
+          <div className="px-4 space-y-4 overflow-y-auto">
             {messages.map((m, idx) => (
               <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-card ${m.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-green-50 text-green-900 border border-green-200'}`}>
+                <div className={`whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white text-black border border-black`}>
                   <span dangerouslySetInnerHTML={{ __html: m.content }} />
+                  {m.kind === 'plan' && (
+                    <div className="mt-3 flex gap-2">
+                      <Button variant="outline" onClick={() => setPlan(null)} disabled={executing}>
+                        <X className="w-4 h-4 mr-1" /> Cancel
+                      </Button>
+                      <Button onClick={executePlan} disabled={executing}>
+                        <Check className="w-4 h-4 mr-1" /> Accept
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
-            {/* Live composing bubble */}
-            {state === "listening" && (
-              <div className="flex justify-end">
-                <div className="max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-card bg-primary text-primary-foreground">
-                  {displayTranscript || "Listening…"}
-                </div>
-              </div>
-            )}
           </div>
-          <div className="border-t p-3 flex items-center gap-2">
-            {(isMobile ? recorder.state === 'recording' : state === "listening") ? (
+          <div className="border-t p-6 flex items-center justify-center">
+            {recorder.state === 'recording' ? (
               <Button
                 onClick={stopAndSummarize}
-                variant="destructive"
-                className="relative"
+                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white text-base"
                 title="Done"
               >
-                <Square className="w-4 h-4 mr-2" /> Done
-                <span className="absolute -z-10 inset-0 rounded-md animate-ping bg-red-500/20" />
+                Done
+                <span className="absolute inset-0 rounded-full animate-ping bg-green-500/30" />
               </Button>
             ) : (
-              <Button onClick={() => (isMobile ? recorder.start() : start())} title="Start" className="bg-green-600 hover:bg-green-700 text-white">
-                <Mic className="w-4 h-4 mr-2" /> Start
+              <Button
+                onClick={() => recorder.start()}
+                title="Start"
+                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center"
+                disabled={processing}
+              >
+                <Mic className="w-6 h-6" />
+                {/** subtle pulse to invite action */}
+                <span className="absolute inset-0 rounded-full animate-pulse bg-green-500/10" />
               </Button>
-            )}
-            {/* Accept/Cancel when a plan is present */}
-            {plan && (
-              <div className="ml-auto flex items-center gap-2">
-                <Button variant="outline" onClick={() => setPlan(null)} disabled={executing}>
-                  <X className="w-4 h-4 mr-1" /> Cancel
-                </Button>
-                <Button onClick={executePlan} disabled={executing}>
-                  <Check className="w-4 h-4 mr-1" /> Accept
-                </Button>
-              </div>
-            )}
-            {!plan && (state !== 'listening') && (
-              <div className="ml-auto text-xs text-muted-foreground">
-                {processing ? 'Processing…' : ''}
-              </div>
             )}
           </div>
         </DialogContent>
