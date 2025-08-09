@@ -622,13 +622,14 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
       );
       if (existingItem) {
         const newQuantity = (existingItem.Quantity || 0) + quantity;
+        const appendedNote = notes && notes.trim() ? (existingItem.notes ? `${existingItem.notes}, ${notes.trim()}` : notes.trim()) : (existingItem.notes ?? null);
         const { error: updateError } = await supabase
           .from('Grocery list')
-          .update({ Quantity: newQuantity })
+          .update({ Quantity: newQuantity, notes: appendedNote })
           .eq('id', existingItem.id);
         if (updateError) throw updateError;
         setItems(prev => prev.map(i => 
-          i.id === existingItem.id ? { ...i, Quantity: newQuantity } : i
+          i.id === existingItem.id ? { ...i, Quantity: newQuantity, notes: appendedNote ?? i.notes } : i
         ));
       } else {
         const { data: minOrderData, error: minOrderError } = await supabase
@@ -643,12 +644,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         }
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
-        const { data, error } = await supabase
+          const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
             Item: itemName,
             Quantity: quantity,
-            notes: notes,
+              notes: notes && notes.trim() ? notes.trim() : null,
             user_id: user.id,
             order: newOrder
           }])
@@ -708,13 +709,14 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         );
         if (existingItem) {
           const newQuantity = (existingItem.Quantity || 0) + qty;
+          const appendedNote = note && note.trim() ? (existingItem.notes ? `${existingItem.notes}, ${note.trim()}` : note.trim()) : (existingItem.notes ?? null);
           const { error: updateError } = await supabase
             .from('Grocery list')
-            .update({ Quantity: newQuantity, notes: note ?? existingItem.notes })
+            .update({ Quantity: newQuantity, notes: appendedNote })
             .eq('id', existingItem.id);
           if (updateError) throw updateError;
           setItems(prev => prev.map(i => 
-            i.id === existingItem.id ? { ...i, Quantity: newQuantity, notes: note ?? i.notes } : i
+            i.id === existingItem.id ? { ...i, Quantity: newQuantity, notes: appendedNote ?? i.notes } : i
           ));
         } else {
           const { data: minOrderData, error: minOrderError } = await supabase
@@ -734,7 +736,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
               {
                 Item: itemName,
                 Quantity: qty,
-                notes: note,
+                notes: note && note.trim() ? note.trim() : null,
                 user_id: user.id,
                 order: newOrder
               }

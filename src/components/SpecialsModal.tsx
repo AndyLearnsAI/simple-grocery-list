@@ -58,6 +58,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const [detailViewItem, setDetailViewItem] = useState<SpecialsItem | null>(null);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
   const [detailQuantity, setDetailQuantity] = useState(1);
+  const [detailNotes, setDetailNotes] = useState("");
   const [addedItems, setAddedItems] = useState<Set<number>>(new Set());
   const [savedItems, setSavedItems] = useState<Set<number>>(new Set());
 
@@ -191,6 +192,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const handleItemClick = (item: SpecialsItem) => {
     setDetailViewItem(item);
     setIsDetailViewOpen(true);
+    setDetailNotes(item.catalogue_date ? `Coles special ${item.catalogue_date}` : "");
   };
 
   const handleAddItemFromCard = async (item: SpecialsItem) => {
@@ -287,7 +289,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
     }
   };
 
-  const handleToggleSavedItem = async (item: SpecialsItem) => {
+  const handleToggleSavedItem = async (item: SpecialsItem, noteOverride?: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
@@ -329,7 +331,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
-        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
+        const note = noteOverride ?? (item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined);
 
         // Add to saved list
         const { error } = await supabase
@@ -371,7 +373,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       const { data: existingItems, error: fetchError } = await supabase
         .from('Grocery list')
-        .select('id, Item, Quantity')
+        .select('*')
         .eq('user_id', user.id);
 
       if (fetchError) throw fetchError;
@@ -410,14 +412,14 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
     }
   };
 
-  const handleAddItem = async (item: SpecialsItem, quantity: number) => {
+  const handleAddItem = async (item: SpecialsItem, quantity: number, note?: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
       const { data: existingItems, error: fetchError } = await supabase
         .from('Grocery list')
-        .select('id, Item, Quantity')
+        .select('*')
         .eq('user_id', user.id);
 
       if (fetchError) throw fetchError;
@@ -432,12 +434,18 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       if (existingItem) {
         originalQuantity = existingItem.Quantity || 0;
         const newQuantity = originalQuantity + quantity;
+        // Append notes if provided
+        const existingItemNotes = (existingItem as any)?.notes as string | null | undefined;
+        const appendedNote = note && note.trim()
+          ? (existingItemNotes ? `${existingItemNotes}, ${note.trim()}` : note.trim())
+          : (existingItemNotes ?? null);
         const { error } = await supabase
           .from('Grocery list')
           .update({ 
             Quantity: newQuantity,
             price: item.price,
-            discount: item.discount
+            discount: item.discount,
+            notes: appendedNote
           })
           .eq('id', existingItem.id);
         if (error) throw error;
@@ -469,7 +477,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             img: item.img, 
             order: newOrder,
             price: item.price,
-            discount: item.discount
+            discount: item.discount,
+            notes: note && note.trim() ? note.trim() : null
           })
           .select('id')
           .single();
@@ -532,13 +541,13 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                         {page.map((item) => (
                           <Card
                             key={item.id}
-                            className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[3/4] border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                             className="flex flex-col text-center cursor-pointer overflow-hidden relative aspect-[4/5] border-2 border-gray-200 hover:border-blue-300 transition-colors"
                             onClick={() => handleItemClick(item)}
                           >
                             <CardContent className="p-1 flex flex-col w-full h-full">
-                              {/* Product Image positioned top right, covering 60% of card */}
+                              {/* Product Image positioned top right, covering 75% of card */}
                               <div className="relative w-full h-full bg-gray-50 rounded-lg overflow-hidden">
-                                <div className="absolute top-0 right-0 w-3/5 h-3/5">
+                                <div className="absolute top-0 right-0 w-3/4 h-3/4">
                                   <img
                                     src={item.img || '/placeholder.svg'}
                                     alt={item.item}
@@ -602,7 +611,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                   {/* Price and Savings Row */}
                                   <div className="flex items-center gap-1 flex-wrap">
                                                                          {/* Price Circle */}
-                                     {item.price && (
+                                      {item.price && (
                                        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs shadow-lg border border-red-600 flex-shrink-0">
                                          <div className="text-center leading-tight text-[16px] sm:text-[18px]">
                                            {item.price.split(' ').map((part, index) => (
@@ -668,7 +677,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 size="sm"
                 variant="ghost"
                 className="absolute top-0 right-0 p-2"
-                onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem)}
+                onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem, (detailNotes || undefined))}
               >
                 <Heart 
                   className={`w-5 h-5 ${
@@ -683,7 +692,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
               <img
                 src={detailViewItem.img || '/placeholder.svg'}
                 alt={detailViewItem.item}
-                className="w-32 h-32 object-contain rounded-lg"
+                className="w-40 h-40 object-contain rounded-lg"
                 onError={(e) => {
                   e.currentTarget.src = '/placeholder.svg';
                 }}
@@ -694,8 +703,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   <div className="mb-4">
                     <div className="flex items-center justify-center gap-2 flex-wrap">
                       {/* Price Circle */}
-                      <div className="w-24 h-24 sm:w-32 sm:h-32 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-sm sm:text-lg shadow-lg border-2 border-red-600 flex-shrink-0">
-                        <div className="text-center leading-tight">
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg border border-red-600 flex-shrink-0">
+                        <div className="text-center leading-tight text-[16px] sm:text-[18px]">
                           {detailViewItem.price.split(' ').map((part, index) => (
                             <div key={index}>
                               {part}
@@ -748,23 +757,34 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   +
                 </Button>
               </div>
+              {/* Notes Field */}
+              <div className="w-full px-4">
+                <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                <textarea
+                  className="w-full border rounded-md p-2 text-sm"
+                  rows={3}
+                  placeholder="Add a note to save with this item"
+                  value={detailNotes}
+                  onChange={(e) => setDetailNotes(e.target.value)}
+                />
+              </div>
               
               {/* Action Buttons */}
               <div className="flex gap-2 justify-center w-full">
-                <Button variant="outline" onClick={() => {
-                  setIsDetailViewOpen(false);
-                  setDetailViewItem(null);
-                }}>
-                  Cancel
-                </Button>
                 <Button onClick={() => {
-                  handleAddItem(detailViewItem, detailQuantity);
+                  handleAddItem(detailViewItem, detailQuantity, detailNotes || undefined);
                   // Also update the addedItems state to show tick in specials modal
                   if (detailViewItem) {
                     setAddedItems(prev => new Set(prev).add(detailViewItem.id));
                   }
                 }}>
                   Add to List
+                </Button>
+                <Button variant="outline" onClick={() => {
+                  setIsDetailViewOpen(false);
+                  setDetailViewItem(null);
+                }}>
+                  Cancel
                 </Button>
               </div>
             </div>
