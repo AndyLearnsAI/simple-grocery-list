@@ -522,8 +522,19 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         }
       }}>
         <DialogContent className="w-[95vw] max-w-6xl h-[95vh] flex flex-col p-2 sm:p-4">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-bold text-center">Weekly Specials</DialogTitle>
+          <DialogHeader className="sticky top-0 z-10 bg-background">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl font-bold text-left">Weekly Specials</DialogTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => { onClose(); onModalClose?.(); }}
+                aria-label="Close specials"
+              >
+                <X className="h-5 w-5" />
+              </Button>
+            </div>
           </DialogHeader>
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
