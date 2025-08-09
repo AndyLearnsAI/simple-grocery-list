@@ -387,19 +387,14 @@ function TouchSortableGroceryItem({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 group">
-              <div className="font-medium text-sm text-muted-foreground">
-                {item.Quantity}
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleQuantityEditToggle}
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                <Eraser className="h-3 w-3" />
-              </Button>
-            </div>
+            <button
+              type="button"
+              onClick={handleQuantityEditToggle}
+              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition"
+              title="Edit quantity"
+            >
+              {item.Quantity}
+            </button>
           )}
         </div>
       </div>
@@ -1261,7 +1256,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         <div className="space-y-4">
           <div className="flex gap-2">
             <Input
-              placeholder="Add a new item... try x2 for qty and brackets for (notes)"
+              placeholder="Add a new item..."
               value={newItem}
               onChange={(e) => setNewItem(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && addItem()}
