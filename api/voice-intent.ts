@@ -5,7 +5,7 @@ const OPENAI_BASE = 'https://api.openai.com/v1';
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
 {
-  "summary": string, // a friendly one-paragraph or bullet summary like: "Great, do you want to add: - 2 chickens - 3 steaks - 4 pork chops?"
+  "summary": string, // plain-text bullets grouped by Add/Remove/Adjust. Example:\nAdd:\n- 2 × chickens\n- 3 × steaks\nRemove:\n- milk\nAdjust:\n- +2 apples
   "plan": {
     "add": Array<{"name": string, "quantity"?: number, "note"?: string}>,
     "remove": Array<{"name": string}>,

@@ -180,7 +180,13 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
               </div>
             ))}
           </div>
-          <div className="border-t p-6 flex items-center justify-center">
+          <div className="border-t p-6 flex flex-col items-center justify-center gap-3">
+            {processing && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-label="Processing" />
+                <span>Processing…</span>
+              </div>
+            )}
             {recorder.state === 'recording' ? (
               <Button
                 onClick={stopAndSummarize}
@@ -194,10 +200,10 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
               <Button
                 onClick={() => recorder.start()}
                 title="Start"
-                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center"
+                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center disabled:opacity-70"
                 disabled={processing}
               >
-                <Mic className="w-6 h-6" />
+                {processing ? <span className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Mic className="w-6 h-6" />}
                 {/** subtle pulse to invite action */}
                 <span className="absolute inset-0 rounded-full animate-pulse bg-green-500/10" />
               </Button>
