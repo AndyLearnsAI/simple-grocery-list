@@ -237,7 +237,7 @@ function TouchSortableGroceryItem({
             {item.checked && <Check className="h-3 w-3" />}
           </Button>
           
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item)}>
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative" onClick={() => onImageClick(item)}>
             {item.img ? (
               <img
                 src={item.img}
@@ -250,6 +250,13 @@ function TouchSortableGroceryItem({
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
               </div>
             )}
+            
+                              {/* Sale tag positioned to hover over the image button */}
+                  {item.discount && item.discount.trim() && (
+                    <div className="absolute -top-0 -right-0 bg-red-500 rounded-full p-0.5 z-10">
+                      <Tag className="h-3 w-3 text-white" title="On special" />
+                    </div>
+                  )}
           </div>
 
           {!isQuantityEditing ? (
@@ -365,10 +372,6 @@ function TouchSortableGroceryItem({
                 >
                   {item.Item}
                 </button>
-              )}
-              {/* Sale tag icon next to name when on special/discount */}
-              {item.discount && item.discount.trim() && (
-                <Tag className="h-4 w-4 text-red-500" title="On special" />
               )}
               {/* moved note icon to far right */}
             </div>
