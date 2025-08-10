@@ -392,7 +392,6 @@ function TouchSortableGroceryItem({
             </PopoverTrigger>
             <PopoverContent side="top" align="end" className="w-72">
               <div className="space-y-2">
-                <div className="text-sm font-medium">Item note</div>
                 <Textarea
                   value={notesValue}
                   onChange={(e) => setNotesValue(e.target.value)}
