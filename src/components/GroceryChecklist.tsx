@@ -1232,6 +1232,15 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
       <Card className="px-0 py-4 shadow-card">
         <div className="space-y-4">
           <div className="flex gap-2 items-center">
+            <Button
+              variant={showSearchSort ? 'default' : 'outline'}
+              size="sm"
+              title="Toggle search & sort"
+              onClick={() => setShowSearchSort(v => !v)}
+              className={`gap-2 ${showSearchSort ? '' : ''}`}
+            >
+              <Search className="h-4 w-4" />
+            </Button>
             <Input
               placeholder="Add a new item..."
               value={newItem}
@@ -1241,16 +1250,6 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
             />
             <Button onClick={addItem} size="sm">
               <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant={showSearchSort ? 'default' : 'outline'}
-              size="sm"
-              title="Toggle search & sort"
-              onClick={() => setShowSearchSort(v => !v)}
-              className={`gap-2 ${showSearchSort ? '' : ''}`}
-            >
-              <Search className="h-4 w-4" />
-              {showSearchSort ? 'Hide' : 'Search'}
             </Button>
           </div>
           {showSearchSort && (
