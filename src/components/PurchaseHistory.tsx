@@ -517,7 +517,7 @@ export function PurchaseHistory() {
                           variant="ghost"
                           size="sm"
                           onClick={() => addToGroceryList(item)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
                           title="Add to grocery list"
                         >
                           <Plus className="h-4 w-4" />
@@ -526,7 +526,7 @@ export function PurchaseHistory() {
                           variant="ghost"
                           size="sm"
                           onClick={() => deletePurchaseHistory(item)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
                           title="Delete item"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -615,7 +615,7 @@ export function PurchaseHistory() {
                           variant="ghost"
                           size="sm"
                           onClick={() => addToGroceryList(item)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
                           title="Add to grocery list"
                         >
                           <Plus className="h-4 w-4" />
@@ -624,7 +624,7 @@ export function PurchaseHistory() {
                           variant="ghost"
                           size="sm"
                           onClick={() => deletePurchaseHistory(item)}
-                          className="opacity-0 group-hover:opacity-100 transition-opacity"
+                          className="text-gray-400 hover:text-gray-600 transition-colors"
                           title="Delete item"
                         >
                           <Trash2 className="h-4 w-4" />

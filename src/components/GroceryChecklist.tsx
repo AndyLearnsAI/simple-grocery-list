@@ -381,7 +381,7 @@ function TouchSortableGroceryItem({
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 mr-2"
                 title={((notesValue || item.notes || "").trim()) ? 'Edit note' : 'Add note'}
               >
                 <FileText className={`h-3 w-3 ${((notesValue || item.notes || "").trim()) ? 'text-green-600' : 'text-muted-foreground/40'}`} />
