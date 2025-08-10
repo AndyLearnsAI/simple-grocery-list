@@ -40,7 +40,6 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
       return;
     }
     setProcessing(true);
-    setMessages((prev) => [...prev, { role: 'assistant', content: 'Just a sec...', kind: 'spinner' }]);
     try {
       const base = import.meta.env.VITE_API_BASE_URL || '';
       const fd = new FormData();
@@ -51,41 +50,32 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
         const data = await res.json();
         const raw = data?.transcript || '';
         const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
-        setPlan(llmPlan);
-        const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
-        setMessages((prev) => {
-          const copy = [...prev];
-          // remove/replace the last assistant processing bubble
-          if (copy.length && copy[copy.length - 1]?.role === 'assistant' && copy[copy.length - 1]?.kind === 'spinner') {
-            copy.pop();
-          }
-          if (raw) copy.push({ role: 'user', content: raw });
-          copy.push({ role: 'assistant', content: summary, kind: 'plan' });
-          return copy;
-        });
+        const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
+        if (isClear) {
+          setPlan(llmPlan);
+          const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
+          setMessages((prev) => {
+            const copy = [...prev];
+            if (raw) copy.push({ role: 'user', content: raw });
+            copy.push({ role: 'assistant', content: summary, kind: 'plan' });
+            return copy;
+          });
+        } else {
+          setPlan(null);
+          setMessages((prev) => {
+            const copy = [...prev];
+            if (raw) copy.push({ role: 'user', content: raw });
+            copy.push({ role: 'assistant', content: "Sorry, couldn't get what you're after. Please try again by tapping the record button" });
+            return copy;
+          });
+        }
         return;
       }
       await res.text();
-      setMessages((prev) => {
-        const copy = [...prev];
-        if (copy.length && copy[copy.length - 1]?.kind === 'spinner') {
-          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' } as any;
-        } else {
-          copy.push({ role: 'assistant', content: 'AI not currently available' });
-        }
-        return copy;
-      });
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
     } catch (e) {
       setProcessing(false);
-      setMessages((prev) => {
-        const copy = [...prev];
-        if (copy.length && copy[copy.length - 1]?.kind === 'spinner') {
-          copy[copy.length - 1] = { role: 'assistant', content: 'AI not currently available' } as any;
-        } else {
-          copy.push({ role: 'assistant', content: 'AI not currently available' });
-        }
-        return copy;
-      });
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
     }
   };
 
@@ -119,8 +109,8 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
       for (const rem of plan.remove) await api.removeByName(rem.name);
       for (const add of plan.add) await api.addOrIncreaseByName(add.name, add.quantity ?? 1, add.note);
       setMessages((prev) => [...prev, { role: "assistant", content: "Applied your changes." }]);
-      // Close the dialog after 2 seconds
-      setTimeout(() => setChatOpen(false), 2000);
+      // Close the dialog after 1 second
+      setTimeout(() => setChatOpen(false), 1000);
       setPlan(null);
     } finally {
       setExecuting(false);
@@ -168,7 +158,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                         variant="outline"
                         onClick={() => {
                           setPlan(null);
-                          setTimeout(() => setChatOpen(false), 2000);
+                          setChatOpen(false);
                         }}
                         disabled={executing}
                       >
@@ -180,24 +170,30 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
               </div>
             ))}
           </div>
-          <div className="border-t p-6 flex items-center justify-center">
+          <div className="border-t p-6 flex flex-col items-center justify-center gap-3">
+            {processing && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-label="Processing" />
+                <span>Processing…</span>
+              </div>
+            )}
             {recorder.state === 'recording' ? (
               <Button
                 onClick={stopAndSummarize}
-                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white text-base"
+                className="relative w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 text-white text-base"
                 title="Done"
               >
                 Done
-                <span className="absolute inset-0 rounded-full animate-ping bg-green-500/30" />
+                <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30" />
               </Button>
             ) : (
               <Button
                 onClick={() => recorder.start()}
                 title="Start"
-                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center"
+                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center disabled:opacity-70"
                 disabled={processing}
               >
-                <Mic className="w-6 h-6" />
+                {processing ? <span className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Mic className="w-6 h-6" />}
                 {/** subtle pulse to invite action */}
                 <span className="absolute inset-0 rounded-full animate-pulse bg-green-500/10" />
               </Button>

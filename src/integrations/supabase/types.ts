@@ -76,6 +76,10 @@ export type Database = {
           Quantity: number
           user_id: string | null
           order: number
+          img: string | null
+          price: string | null
+          discount: string | null
+          notes: string | null
         }
         Insert: {
           created_at?: string
@@ -84,6 +88,10 @@ export type Database = {
           Quantity?: number
           user_id?: string | null
           order?: number
+          img?: string | null
+          price?: string | null
+          discount?: string | null
+          notes?: string | null
         }
         Update: {
           created_at?: string
@@ -92,6 +100,10 @@ export type Database = {
           Quantity?: number
           user_id?: string | null
           order?: number
+          img?: string | null
+          price?: string | null
+          discount?: string | null
+          notes?: string | null
         }
         Relationships: []
       }

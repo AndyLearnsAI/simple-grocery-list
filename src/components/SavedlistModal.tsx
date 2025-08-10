@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical, ShoppingCart, Check, Eraser } from "lucide-react";
+import { Package, Plus, Minus, X, Edit3, Trash2, Search, ArrowUpDown, GripVertical, ShoppingCart, Check, Eraser, FileText, Tag } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,10 +67,13 @@ function TouchSortableSavedlistItem({
   const [editValue, setEditValue] = useState(item.Item);
   const [editError, setEditError] = useState("");
   const [editQuantity, setEditQuantity] = useState(item.selectedQuantity);
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesValue, setNotesValue] = useState(item.notes || "");
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const editQuantityRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   // Validation function
   const validateItemName = (name: string): string => {
@@ -139,21 +144,17 @@ function TouchSortableSavedlistItem({
   const handleQuantityEditToggle = () => {
     if (isQuantityEditing) {
       // Save the quantity
-      onUpdateQuantity(item.id, editQuantity - item.selectedQuantity);
-      setIsQuantityEditing(false);
+      const quantityChange = editQuantity - item.selectedQuantity;
+      onUpdateQuantity(item.id, quantityChange);
     } else {
-      // Start editing
+      // Start editing - set the current quantity
       setEditQuantity(item.selectedQuantity);
-      setIsQuantityEditing(true);
-      setTimeout(() => {
-        editQuantityRef.current?.focus();
-        editQuantityRef.current?.select();
-      }, 0);
     }
+    setIsQuantityEditing(!isQuantityEditing);
   };
 
   const handleQuantityChange = (change: number) => {
-    const newQuantity = Math.max(1, Math.min(99, editQuantity + change));
+    const newQuantity = Math.max(1, editQuantity + change);
     setEditQuantity(newQuantity);
   };
 
@@ -161,6 +162,39 @@ function TouchSortableSavedlistItem({
     const value = parseInt(e.target.value) || 1;
     const clampedValue = Math.max(1, Math.min(99, value));
     setEditQuantity(clampedValue);
+  };
+
+  const handleNotesSave = async () => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) return;
+
+      const { error } = await supabase
+        .from('SavedlistItems')
+        .update({ notes: notesValue.trim() || null })
+        .eq('id', item.id)
+        .eq('user_id', user.data.user.id);
+
+      if (error) throw error;
+
+      // Close the popover
+      setNotesOpen(false);
+      
+      // Refresh the items to show updated notes
+      // This will be handled by the parent component's fetchSavedlistItems
+      
+      toast({
+        title: "Notes updated",
+        description: "Item notes have been saved",
+      });
+    } catch (error) {
+      console.error('Error updating notes:', error);
+      toast({
+        title: "Error updating notes",
+        description: "Failed to save notes",
+        variant: "destructive",
+      });
+    }
   };
 
   const calculateDestination = (deltaY: number) => {
@@ -303,63 +337,10 @@ function TouchSortableSavedlistItem({
             <GripVertical className="h-4 w-4 text-muted-foreground" />
           </div>
           
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer" onClick={() => onImageClick(item)}>
-            {item.img ? (
-              <img
-                src={item.img}
-                alt={item.Item}
-                className="w-full h-full object-contain"
-                onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <ShoppingCart className="h-4 w-4 text-gray-400" />
-              </div>
-            )}
-          </div>
-          
-          <div className="flex-1 min-w-0">
-            {isEditing ? (
-              <div className="space-y-1">
-                <Input
-                  ref={editInputRef}
-                  value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
-                  onBlur={handleEditSave}
-                  onKeyDown={handleEditKeyDown}
-                  className="h-8 text-sm"
-                  maxLength={99}
-                />
-                {editError && (
-                  <div className="text-xs text-destructive">{editError}</div>
-                )}
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 group">
-                <div className="font-medium text-sm break-words text-foreground">
-                  {item.Item}
-                </div>
-                {!isQuantityEditing && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleEditStart}
-                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <Edit3 className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
+          {/* Quantity Counter - Left side */}
           {isQuantityEditing ? (
             <div className="relative">
-              {/* Cross layout for quantity editing */}
               <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20 items-center justify-center">
-                {/* Top row */}
                 <div></div>
                 <Button
                   variant="outline"
@@ -370,8 +351,6 @@ function TouchSortableSavedlistItem({
                   <Plus className="h-3 w-3" />
                 </Button>
                 <div></div>
-                
-                {/* Middle row */}
                 <Button
                   variant="ghost"
                   size="sm"
@@ -398,8 +377,6 @@ function TouchSortableSavedlistItem({
                 >
                   <Check className="h-3 w-3 text-green-600" />
                 </Button>
-                
-                {/* Bottom row */}
                 <div></div>
                 <Button
                   variant="outline"
@@ -414,20 +391,116 @@ function TouchSortableSavedlistItem({
               </div>
             </div>
           ) : (
-            <div className="flex items-center gap-2 group">
-              <div className="font-medium text-sm text-muted-foreground">
-                {item.selectedQuantity}
+            <button
+              type="button"
+              onClick={() => setIsQuantityEditing(true)}
+              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2"
+              title="Edit quantity"
+            >
+              {item.selectedQuantity}
+            </button>
+          )}
+          
+          {/* Image with sale tag overlay */}
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative" onClick={() => onImageClick(item)}>
+            {item.img ? (
+              <img
+                src={item.img}
+                alt={item.Item}
+                className="w-full h-full object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder.svg'; }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ShoppingCart className="h-4 w-4 text-gray-400" />
               </div>
+            )}
+
+            {/* Sale tag positioned to hover over the image button */}
+            {item.discount && item.discount.trim() && (
+              <div className="absolute -top-0 -right-0 bg-red-500 rounded-full p-0.5 z-10">
+                <Tag className="h-3 w-3 text-white" />
+              </div>
+            )}
+          </div>
+          
+          {/* Item Name with inline editing */}
+          <div className="flex-1 min-w-0">
+            {isEditing ? (
+              <div className="space-y-1">
+                <Input
+                  ref={editInputRef}
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onBlur={handleEditSave}
+                  onKeyDown={handleEditKeyDown}
+                  className="h-8 text-sm"
+                  maxLength={99}
+                />
+                {editError && (
+                  <div className="text-xs text-destructive">{editError}</div>
+                )}
+              </div>
+            ) : (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={handleQuantityEditToggle}
-                className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={handleEditStart}
+                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent"
               >
-                <Eraser className="h-3 w-3" />
+                {item.Item}
               </Button>
-            </div>
-          )}
+            )}
+          </div>
+        </div>
+        
+        {/* Notes Icon - Far right */}
+        <div className="flex items-center gap-2">
+          <Popover open={notesOpen} onOpenChange={setNotesOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-6 w-6 p-0 mr-2 ${
+                  item.notes && item.notes.trim() 
+                    ? 'text-green-600' 
+                    : 'text-muted-foreground/40'
+                }`}
+                title={item.notes && item.notes.trim() ? "Edit notes" : "Add notes"}
+              >
+                <FileText className="h-3 w-3" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Textarea
+                    placeholder="Enter notes..."
+                    value={notesValue}
+                    onChange={(e) => setNotesValue(e.target.value)}
+                    className="min-h-[80px]"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setNotesOpen(false)}
+                    className="flex-1"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleNotesSave}
+                    className="flex-1"
+                  >
+                    Save Notes
+                  </Button>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
     </Card>
@@ -439,6 +512,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   const [loading, setLoading] = useState(true);
   const [newItem, setNewItem] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [searchVisible, setSearchVisible] = useState(false);
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
   const [detailModalItem, setDetailModalItem] = useState<SavedlistItem | null>(null);
@@ -981,10 +1055,21 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
           </DialogHeader>
           
           <div className="space-y-4">
-            {/* Add new item input */}
+            {/* Add new item input with search toggle */}
             <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSearchVisible(!searchVisible)}
+                className={`h-10 w-10 p-0 border border-input bg-background ${
+                  searchVisible ? 'bg-green-500 border-green-600 text-white hover:bg-green-600' : ''
+                }`}
+                title="Toggle search and sort"
+              >
+                <Search className="h-4 w-4" />
+              </Button>
               <Input
-                placeholder="Add a new item... try x2 for qty and brackets for (notes)"
+                placeholder="Add a new item..."
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
@@ -995,50 +1080,52 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
               </Button>
             </div>
 
-            {/* Search Bar and Sort Button */}
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search items..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-10"
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setSearchTerm("")}
-                    className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                )}
+            {/* Search Bar and Sort Button - Hidden by default */}
+            {searchVisible && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search items..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10 pr-10"
+                  />
+                  {searchTerm && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSearchTerm("")}
+                      className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2">
+                      <ArrowUpDown className="h-4 w-4" />
+                      Sort
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => sortItems('newest')}>
+                      Sort by newest
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => sortItems('oldest')}>
+                      Sort by oldest
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => sortItems('az')}>
+                      Sort A-Z
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => sortItems('za')}>
+                      Sort Z-A
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <ArrowUpDown className="h-4 w-4" />
-                    Sort
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={() => sortItems('newest')}>
-                    Sort by newest
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => sortItems('oldest')}>
-                    Sort by oldest
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => sortItems('az')}>
-                    Sort A-Z
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => sortItems('za')}>
-                    Sort Z-A
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            )}
 
             {/* Saved List Items */}
             <div className={`space-y-0 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>

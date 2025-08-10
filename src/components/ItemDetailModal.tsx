@@ -255,16 +255,6 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                 <Edit3 className="h-4 w-4" />
               </Button>
               </div>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={handleDelete}
-                title="Remove item"
-              >
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -316,6 +306,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         </div>
         <div className="flex gap-2 justify-end mt-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button variant="destructive" onClick={handleDelete} className="gap-2"><Trash2 className="h-4 w-4" /> Delete</Button>
           <Button onClick={handleUpdate}>Update</Button>
         </div>
       </DialogContent>

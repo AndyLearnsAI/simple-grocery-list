@@ -194,7 +194,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const handleItemClick = (item: SpecialsItem) => {
     setDetailViewItem(item);
     setIsDetailViewOpen(true);
-    setDetailNotes(item.catalogue_date ? `Coles special ${item.catalogue_date}` : "");
+    // Default notes to empty; user can add a note explicitly in detail view
+    setDetailNotes("");
   };
 
   const handleAddItemFromCard = async (item: SpecialsItem) => {
@@ -248,8 +249,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
-        const note = item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined;
-
         const { data: newItem, error } = await supabase
           .from('Grocery list')
           .insert({ 
@@ -260,7 +259,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             order: newOrder,
             price: item.price,
             discount: item.discount,
-            notes: note
+            // Do not set default notes when adding from specials quick add
+            notes: null
           })
           .select('id')
           .single();
@@ -333,8 +333,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
 
-        const note = noteOverride ?? (item.catalogue_date ? `Coles special ${item.catalogue_date}` : undefined);
-
         // Add to saved list
         const { error } = await supabase
           .from('SavedlistItems')
@@ -346,7 +344,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             order: newOrder, // Add order
             price: item.price,
             discount: item.discount,
-            notes: note
+            notes: noteOverride ?? null
           });
 
         if (error) throw error;
@@ -436,11 +434,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       if (existingItem) {
         originalQuantity = existingItem.Quantity || 0;
         const newQuantity = originalQuantity + quantity;
-        // Append notes if provided
+        // Only append provided note; do not auto-add defaults
         const existingItemNotes = (existingItem as any)?.notes as string | null | undefined;
-        const appendedNote = note && note.trim()
-          ? (existingItemNotes ? `${existingItemNotes}, ${note.trim()}` : note.trim())
-          : (existingItemNotes ?? null);
+        const appendedNote = note && note.trim() ? (existingItemNotes ? `${existingItemNotes}, ${note.trim()}` : note.trim()) : (existingItemNotes ?? null);
         const { error } = await supabase
           .from('Grocery list')
           .update({ 
