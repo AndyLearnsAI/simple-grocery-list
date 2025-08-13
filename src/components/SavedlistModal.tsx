@@ -188,7 +188,6 @@ function TouchSortableSavedlistItem({
         description: "Item notes have been saved",
       });
     } catch (error) {
-      console.error('Error updating notes:', error);
       toast({
         title: "Error updating notes",
         description: "Failed to save notes",
@@ -540,7 +539,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       setSavedlistItems(savedlistItemsWithSelection);
     } catch (error) {
-      console.error('Error fetching saved list items:', error);
+      // Error already handled by UI state
       toast({
         title: "Error loading saved list items",
         description: "Failed to load saved list items from database",
@@ -574,7 +573,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       setSavedlistItems(updatedItems);
       await updateItemsOrder(updatedItems);
     } catch (error) {
-      console.error('Error reordering items:', error);
+      // Error in reordering - silently fail
       toast({
         title: "Error reordering",
         description: "Failed to reorder items",
@@ -674,7 +673,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       return true;
     } catch (error) {
-      console.error('Error updating item name:', error);
+      // Error updating item name - return false for proper handling
       toast({
         title: "Error updating item",
         description: "Failed to update item name",
@@ -879,7 +878,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             .single();
 
           if (insertError) {
-            console.error('Error inserting item:', insertError);
+            // Error inserting item - already handled by toast below
             if (insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
               throw new Error(`Item "${selectedItem.Item}" already exists in your list. Try updating the quantity instead.`);
             }
@@ -1011,7 +1010,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       });
 
     } catch (error) {
-      console.error('Error in sortItems function:', error);
+      // Error in sorting - silently fail
       toast({
         title: "Error sorting items",
         description: "Failed to sort saved list",

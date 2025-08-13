@@ -122,7 +122,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       setAddedItems(alreadyAddedItems);
     } catch (error) {
-      console.error('Error checking existing items:', error);
+      // Silently handle error - non-critical functionality
     }
   };
 
@@ -151,7 +151,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       setSavedItems(alreadySavedItems);
     } catch (error) {
-      console.error('Error checking saved items:', error);
+      // Silently handle error - non-critical functionality
     }
   };
 
@@ -166,7 +166,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       if (error) throw error;
 
-      console.log('Specials data:', data);
       setSpecials(data || []);
     } catch (error) {
       toast({

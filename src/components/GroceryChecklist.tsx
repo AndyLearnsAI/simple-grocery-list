@@ -494,7 +494,6 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
       setItems(updatedItems);
       await updateItemsOrder(updatedItems);
     } catch (error) {
-      console.error('Error reordering items:', error);
       toast({
         title: "Error reordering",
         description: "Failed to reorder items",
