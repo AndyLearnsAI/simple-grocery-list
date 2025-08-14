@@ -69,8 +69,6 @@ function TouchSortableSavedlistItem({
   const [editValue, setEditValue] = useState(item.Item);
   const [editError, setEditError] = useState("");
   const [editQuantity, setEditQuantity] = useState(item.selectedQuantity);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesValue, setNotesValue] = useState(item.notes || "");
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -166,37 +164,6 @@ function TouchSortableSavedlistItem({
     setEditQuantity(clampedValue);
   };
 
-  const handleNotesSave = async () => {
-    try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
-
-      const { error } = await supabase
-        .from('SavedlistItems')
-        .update({ notes: notesValue.trim() || null })
-        .eq('id', item.id)
-        .eq('user_id', user.data.user.id);
-
-      if (error) throw error;
-
-      // Close the popover
-      setNotesOpen(false);
-      
-      // Refresh the items to show updated notes
-      // This will be handled by the parent component's fetchSavedlistItems
-      
-      toast({
-        title: "Notes updated",
-        description: "Item notes have been saved",
-      });
-    } catch (error) {
-      toast({
-        title: "Error updating notes",
-        description: "Failed to save notes",
-        variant: "destructive",
-      });
-    }
-  };
 
   const calculateDestination = (deltaY: number) => {
     const itemHeight = itemRef.current?.offsetHeight || 80;
@@ -321,12 +288,12 @@ function TouchSortableSavedlistItem({
         transition: isDragging ? 'none' : 'none',
       }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1">
+      <div className="flex items-center w-full">
+        <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Drag Handle */}
           <div
             ref={dragRef}
-            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none flex-shrink-0 ${
               isEditing || isQuantityEditing ? 'opacity-50 pointer-events-none' : ''
             }`}
             onTouchStart={handleTouchStart}
@@ -340,7 +307,7 @@ function TouchSortableSavedlistItem({
           
           {/* Quantity Counter - Left side */}
           {isQuantityEditing ? (
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20 items-center justify-center">
                 <div></div>
                 <Button
@@ -395,7 +362,7 @@ function TouchSortableSavedlistItem({
             <button
               type="button"
               onClick={() => setIsQuantityEditing(true)}
-              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2"
+              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2 flex-shrink-0"
               title="Edit quantity"
             >
               {item.selectedQuantity}
@@ -448,61 +415,12 @@ function TouchSortableSavedlistItem({
                 variant="ghost"
                 size="sm"
                 onClick={handleEditStart}
-                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent"
+                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent w-full justify-start"
               >
                 {item.Item}
               </Button>
             )}
           </div>
-        </div>
-        
-        {/* Notes Icon - Far right */}
-        <div className="flex items-center gap-2">
-          <Popover open={notesOpen} onOpenChange={setNotesOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-6 w-6 p-0 mr-2 ${
-                  item.notes && item.notes.trim() 
-                    ? 'text-green-600' 
-                    : 'text-muted-foreground/40'
-                }`}
-                title={item.notes && item.notes.trim() ? "Edit notes" : "Add notes"}
-              >
-                <FileText className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Textarea
-                    placeholder="Enter notes..."
-                    value={notesValue}
-                    onChange={(e) => setNotesValue(e.target.value)}
-                    className="min-h-[80px]"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNotesOpen(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleNotesSave}
-                    className="flex-1"
-                  >
-                    Save Notes
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
         </div>
       </div>
     </Card>
