@@ -22,6 +22,7 @@ interface GroceryItem {
   Quantity?: number;
   price?: string | null;
   discount?: string | null;
+  discount_percentage?: string | null;
   notes?: string | null;
   user_id?: string;
   img?: string | null;

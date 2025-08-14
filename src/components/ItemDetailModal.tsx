@@ -18,6 +18,7 @@ interface ItemDetailModalProps {
     img?: string | null;
     price?: string | null;
     discount?: string | null;
+    discount_percentage?: string | null;
     notes?: string | null;
   };
   tableName: 'Grocery list' | 'SavedlistItems';
@@ -27,6 +28,7 @@ interface ItemDetailModalProps {
 export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: ItemDetailModalProps) {
   const [quantity, setQuantity] = useState(item.Quantity || 1);
   const [price, setPrice] = useState(item.price || "");
+  const [discountPercentage, setDiscountPercentage] = useState(item.discount_percentage || "");
   const [discount, setDiscount] = useState(item.discount || "");
   const [notes, setNotes] = useState(item.notes || "");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -37,6 +39,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
   useEffect(() => {
     setQuantity(item.Quantity || 1);
     setPrice(item.price || "");
+    setDiscountPercentage(item.discount_percentage || "");
     setDiscount(item.discount || "");
     setNotes(item.notes || "");
     setNameValue(item.Item);
@@ -104,6 +107,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         .update({
           Quantity: quantity,
           price: price,
+          discount_percentage: discountPercentage || null,
           discount: discount,
           notes: notes,
         })
@@ -164,6 +168,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                       user_id: user.id,
                       img: (snapshot as any).img || null,
                       price: (snapshot as any).price || null,
+                      discount_percentage: (snapshot as any).discount_percentage || null,
                       discount: (snapshot as any).discount || null,
                       notes: (snapshot as any).notes || null,
                       order: newOrder,
@@ -187,6 +192,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                       user_id: user.id,
                       img: (snapshot as any).img || null,
                       price: (snapshot as any).price || null,
+                      discount_percentage: (snapshot as any).discount_percentage || null,
                       discount: (snapshot as any).discount || null,
                       notes: (snapshot as any).notes || null,
                       order: newOrder,
@@ -293,6 +299,15 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
             <div className="flex items-center">
               <label htmlFor="price" className="w-1/4 text-sm font-medium pr-2">Price</label>
               <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
+            <div className="flex items-center">
+              <label htmlFor="discount_percentage" className="w-1/4 text-sm font-medium pr-2">Discount %</label>
+              <Input 
+                id="discount_percentage" 
+                type="text" 
+                value={discountPercentage} 
+                onChange={(e) => setDiscountPercentage(e.target.value)}
+              />
             </div>
             <div className="flex items-center">
               <label htmlFor="discount" className="w-1/4 text-sm font-medium pr-2">Discount</label>

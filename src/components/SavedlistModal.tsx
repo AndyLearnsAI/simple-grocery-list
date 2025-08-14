@@ -21,6 +21,7 @@ interface SavedlistItem {
   order: number;
   price?: string | null;
   discount?: string | null;
+  discount_percentage?: string | null;
   notes?: string | null;
 }
 
@@ -414,6 +415,7 @@ function TouchSortableSavedlistItem({
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
               </div>
             )}
+
 
             {/* Sale tag positioned to hover over the image button */}
             {item.discount && item.discount.trim() && (
