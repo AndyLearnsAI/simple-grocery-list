@@ -23,6 +23,7 @@ interface SavedlistItem {
   discount?: string | null;
   discount_percentage?: string | null;
   notes?: string | null;
+  link?: string | null;
 }
 
 interface SelectedSavedlistItem extends SavedlistItem {

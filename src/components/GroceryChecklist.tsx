@@ -26,6 +26,7 @@ interface GroceryItem {
   notes?: string | null;
   user_id?: string;
   img?: string | null;
+  link?: string | null;
   order: number;
 }
 

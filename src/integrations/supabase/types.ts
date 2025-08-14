@@ -27,6 +27,7 @@ export type Database = {
           discount_percentage: string | null
           notes: string | null
           img: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -37,9 +38,10 @@ export type Database = {
           order?: number
           price?: string | null
           discount?: string | null
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           notes?: string | null
           img?: string | null
+          link?: string | null
         }
         Update: {
           created_at?: string
@@ -50,9 +52,10 @@ export type Database = {
           order?: number
           price?: string | null
           discount?: string | null
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           notes?: string | null
           img?: string | null
+          link?: string | null
         }
         Relationships: []
       }
@@ -96,6 +99,7 @@ export type Database = {
           discount: string | null
           discount_percentage: string | null
           notes: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -138,6 +142,7 @@ export type Database = {
           on_special: boolean
           discount_percentage: string | null
           img: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -149,8 +154,9 @@ export type Database = {
           discount?: string | null
           catalogue_date?: string | null
           on_special?: boolean
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           img?: string | null
+          link?: string | null
         }
         Update: {
           created_at?: string
@@ -162,8 +168,9 @@ export type Database = {
           discount?: string | null
           catalogue_date?: string | null
           on_special?: boolean
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           img?: string | null
+          link?: string | null
         }
         Relationships: []
       }

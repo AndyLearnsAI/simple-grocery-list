@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Edit3, Trash2 } from "lucide-react";
+import { Edit3, Trash2, ExternalLink } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 
 interface ItemDetailModalProps {
@@ -20,6 +20,7 @@ interface ItemDetailModalProps {
     discount?: string | null;
     discount_percentage?: string | null;
     notes?: string | null;
+    link?: string | null;
   };
   tableName: 'Grocery list' | 'SavedlistItems';
   onUpdate: () => void;
@@ -266,12 +267,24 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         </DialogHeader>
         <div className="flex flex-col items-center gap-4 pt-4">
           {item.img ? (
-            <img
-              src={item.img}
-              alt={item.Item}
-              className="w-32 h-32 object-contain rounded-lg"
-              onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
-            />
+            <div className="relative">
+              <img
+                src={item.img}
+                alt={item.Item}
+                className={`w-32 h-32 object-contain rounded-lg ${item.link ? 'cursor-pointer hover:opacity-80' : ''}`}
+                onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
+                onClick={() => {
+                  if (item.link) {
+                    window.open(item.link, '_blank');
+                  }
+                }}
+              />
+              {item.link && (
+                <div className="absolute bottom-2 right-2 bg-green-400 rounded-full p-1 shadow-sm">
+                  <ExternalLink className="h-3 w-3 text-white" />
+                </div>
+              )}
+            </div>
           ) : (
             <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart text-gray-400"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.16"/></svg>

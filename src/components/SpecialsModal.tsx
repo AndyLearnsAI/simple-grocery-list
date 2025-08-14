@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, Minus, Check, Heart } from "lucide-react";
+import { X, Plus, Minus, Check, Heart, ExternalLink } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -225,7 +225,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             Quantity: newQuantity,
             price: item.price,
             discount: item.discount,
-            discount_percentage: item.discount_percentage
+            discount_percentage: item.discount_percentage,
+            link: item.link
           })
           .eq('id', existingItem.id);
         if (error) throw error;
@@ -260,6 +261,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             price: item.price,
             discount: item.discount,
             discount_percentage: item.discount_percentage,
+            link: item.link,
             // Do not set default notes when adding from specials quick add
             notes: null
           })
@@ -346,6 +348,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             price: item.price,
             discount: item.discount,
             discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: noteOverride ?? null
           });
 
@@ -446,6 +449,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             price: item.price,
             discount: item.discount,
             discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: appendedNote
           })
           .eq('id', existingItem.id);
@@ -480,6 +484,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             price: item.price,
             discount: item.discount,
             discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: note && note.trim() ? note.trim() : null
           })
           .select('id')
@@ -695,14 +700,26 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
               <div className="flex gap-4 px-4">
                 {/* Left Column - Image (50%) */}
                 <div className="flex-1 flex flex-col items-center">
-                  <img
-                    src={detailViewItem.img || '/placeholder.svg'}
-                    alt={detailViewItem.item}
-                    className="w-40 h-40 object-contain rounded-lg"
-                    onError={(e) => {
-                      e.currentTarget.src = '/placeholder.svg';
-                    }}
-                  />
+                  <div className="relative">
+                    <img
+                      src={detailViewItem.img || '/placeholder.svg'}
+                      alt={detailViewItem.item}
+                      className={`w-40 h-40 object-contain rounded-lg ${detailViewItem.link ? 'cursor-pointer hover:opacity-80' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder.svg';
+                      }}
+                      onClick={() => {
+                        if (detailViewItem.link) {
+                          window.open(detailViewItem.link, '_blank');
+                        }
+                      }}
+                    />
+                    {detailViewItem.link && (
+                      <div className="absolute bottom-2 right-2 bg-green-400 rounded-full p-1 shadow-sm">
+                        <ExternalLink className="h-3 w-3 text-white" />
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 {/* Right Column - Notes (50%) */}
