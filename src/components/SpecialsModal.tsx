@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, Minus, Check, Heart, ExternalLink } from "lucide-react";
+import { X, Plus, Minus, Check, Heart, Link } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -700,7 +700,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
               <div className="flex gap-4 px-4">
                 {/* Left Column - Image (50%) */}
                 <div className="flex-1 flex flex-col items-center">
-                  <div className="relative">
+                  <div className="relative group">
                     <img
                       src={detailViewItem.img || '/placeholder.svg'}
                       alt={detailViewItem.item}
@@ -715,8 +715,16 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                       }}
                     />
                     {detailViewItem.link && (
-                      <div className="absolute bottom-2 right-2 bg-green-400 rounded-full p-1 shadow-sm">
-                        <ExternalLink className="h-3 w-3 text-white" />
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
+                        <div 
+                          className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(detailViewItem.link, '_blank');
+                          }}
+                        >
+                          <Link className="h-4 w-4 text-green-700" />
+                        </div>
                       </div>
                     )}
                   </div>

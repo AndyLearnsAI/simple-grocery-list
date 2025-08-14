@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Edit3, Trash2, ExternalLink } from "lucide-react";
+import { Edit3, Trash2, Link } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 
 interface ItemDetailModalProps {
@@ -267,7 +267,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         </DialogHeader>
         <div className="flex flex-col items-center gap-4 pt-4">
           {item.img ? (
-            <div className="relative">
+            <div className="relative group">
               <img
                 src={item.img}
                 alt={item.Item}
@@ -280,8 +280,16 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                 }}
               />
               {item.link && (
-                <div className="absolute bottom-2 right-2 bg-green-400 rounded-full p-1 shadow-sm">
-                  <ExternalLink className="h-3 w-3 text-white" />
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
+                  <div 
+                    className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(item.link, '_blank');
+                    }}
+                  >
+                    <Link className="h-4 w-4 text-green-700" />
+                  </div>
                 </div>
               )}
             </div>
