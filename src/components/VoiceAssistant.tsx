@@ -1,11 +1,9 @@
-import { useMemo, useRef, useState, useEffect } from "react";
-import { Mic, Square, Check, X, Volume2, VolumeX } from "lucide-react";
+import { useMemo, useRef, useState } from "react";
+import { Mic, Square, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
-import { useRealTimeAudio } from "@/hooks/useRealTimeAudio";
-import { useGeminiLiveSession, type LiveSessionMessage, type FunctionCall } from "@/hooks/useGeminiLiveSession";
-import { useRealTimeTranscription } from "@/hooks/useRealTimeTranscription";
+import { useAudioRecorder } from "@/hooks/useAudioRecorder";
 import { parseVoiceToPlan, type ParsedPlan } from "@/services/voiceIntent";
 import type { GroceryChecklistHandle } from "@/components/GroceryChecklist";
 
@@ -14,175 +12,109 @@ type VoiceAssistantProps = {
 };
 
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
-  const audio = useRealTimeAudio();
-  const liveSession = useGeminiLiveSession();
-  const transcription = useRealTimeTranscription();
+  const recorder = useAudioRecorder();
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   
   const [chatOpen, setChatOpen] = useState(false);
   const [plan, setPlan] = useState<ParsedPlan | null>(null);
   const [executing, setExecuting] = useState(false);
-  const [isLiveMode, setIsLiveMode] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [transcript, setTranscript] = useState("");
-  const [isMuted, setIsMuted] = useState(false);
+  const [streamingResponse, setStreamingResponse] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
   type ChatMessage = { 
     role: "user" | "assistant"; 
     content: string; 
-    kind?: "plan" | "text" | "spinner" | "audio" | "live_transcript";
+    kind?: "plan" | "text" | "streaming";
   };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  // Initialize live session when opening chat
-  const openChat = async () => {
-    if (!audio.isSupported) return;
-    
+  const openChat = () => {
+    if (!recorder.isSupported) return;
     setChatOpen(true);
     setPlan(null);
     setTranscript("");
-    setIsLiveMode(false);
-    
+    setStreamingResponse("");
+    setIsStreaming(false);
     // Show an initial assistant hint only if chat is empty
     setMessages((prev) => (prev.length ? prev : [{ 
       role: "assistant", 
-      content: "Choose 'Live Chat' for real-time conversation or 'Record' for traditional voice recording.", 
+      content: "Tap 'Start' and say what you'd like to do with the grocery list. Tap 'Done' when you're finished talking.", 
       kind: "text" 
     }]));
   };
 
-  // Start live conversation mode
-  const startLiveMode = async () => {
-    await audio.resumeAudioContext();
-    
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.", 
-        kind: "text" 
-      }]);
+  const stopAndSummarize = async () => {
+    const blob = await recorder.stop();
+    if (!blob) {
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Recording failed. Please try again.' }]);
       return;
     }
-
-    const connected = await liveSession.connect(apiKey);
-    if (connected) {
-      setIsLiveMode(true);
+    setProcessing(true);
+    
+    try {
+      const base = import.meta.env.VITE_API_BASE_URL || '';
+      const fd = new FormData();
+      fd.append('audio', blob, 'voice.webm');
+      const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
+      setProcessing(false);
       
-      // Start real-time transcription
-      transcription.startTranscribing(
-        (transcript) => {
-          setTranscript(transcript);
-        },
-        (audioData) => {
-          liveSession.sendAudio(audioData);
+      if (res.ok) {
+        const data = await res.json();
+        const raw = data?.transcript || '';
+        
+        // Immediately show transcript
+        if (raw) {
+          setTranscript(raw);
+          setMessages((prev) => [...prev, { role: 'user', content: raw }]);
         }
-      );
-
-      // Start real-time audio streaming
-      const success = await audio.startRecording((audioChunk) => {
-        transcription.processAudioChunk(audioChunk);
-      });
-
-      if (!success) {
-        setMessages(prev => [...prev, { 
-          role: "assistant", 
-          content: "Failed to start audio recording. Please check microphone permissions.", 
-          kind: "text" 
-        }]);
+        
+        // Start streaming response
+        if (data?.summary) {
+          setIsStreaming(true);
+          setStreamingResponse("");
+          await streamText(data.summary);
+          
+          // After streaming, process the plan
+          const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
+          const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
+          
+          if (isClear) {
+            setPlan(llmPlan);
+            setMessages((prev) => [...prev, { 
+              role: 'assistant', 
+              content: data.summary, 
+              kind: 'plan' 
+            }]);
+          } else {
+            setMessages((prev) => [...prev, { 
+              role: 'assistant', 
+              content: data.summary || "I heard you, but I'm not sure what changes you'd like to make to your grocery list."
+            }]);
+          }
+        }
+        return;
       }
-    } else {
-      setMessages(prev => [...prev, { 
-        role: "assistant", 
-        content: "Failed to connect to Gemini Live API. Please check your configuration.", 
-        kind: "text" 
-      }]);
+      
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
+    } catch (e) {
+      setProcessing(false);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
     }
   };
 
-  // Stop live conversation mode
-  const stopLiveMode = async () => {
-    audio.stopRecording();
-    await transcription.stopTranscribing();
-    liveSession.disconnect();
-    setIsLiveMode(false);
-    setTranscript("");
-  };
-
-  // Handle live session messages
-  useEffect(() => {
-    const latestMessage = liveSession.messages[liveSession.messages.length - 1];
-    if (!latestMessage) return;
-
-    const handleMessage = (message: LiveSessionMessage) => {
-      switch (message.type) {
-        case "text":
-          // Handle both user and assistant messages
-          const messageData = message.data;
-          if (typeof messageData === 'string') {
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: messageData,
-              kind: "text"
-            }]);
-          } else if (messageData?.role && messageData?.content) {
-            setMessages(prev => [...prev, {
-              role: messageData.role,
-              content: messageData.content,
-              kind: "text"
-            }]);
-          }
-          break;
-
-        case "audio":
-          // Play audio response and add visual indicator
-          if (!isMuted) {
-            audio.playAudioResponse(message.data.data);
-          }
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: "🔊 Audio response",
-            kind: "audio"
-          }]);
-          break;
-
-        case "function_call": {
-          const functionCall = message.data as FunctionCall;
-          if (functionCall.name === "generate_grocery_plan") {
-            const planData = functionCall.args;
-            const newPlan: ParsedPlan = {
-              add: planData.plan?.add || [],
-              remove: planData.plan?.remove || [],
-              adjust: planData.plan?.adjust || [],
-              raw: planData.summary || ""
-            };
-            
-            setPlan(newPlan);
-            setMessages(prev => [...prev, {
-              role: "assistant",
-              content: planData.summary || buildPlanSummary(newPlan),
-              kind: "plan"
-            }]);
-
-            // Respond to function call
-            liveSession.respondToFunctionCall(functionCall.id, {
-              success: true,
-              message: "Plan generated successfully. Waiting for user approval."
-            });
-          }
-          break;
-        }
-      }
-    };
-
-    handleMessage(latestMessage);
-  }, [liveSession.messages, audio, isMuted, liveSession]);
-
-  // Toggle mute for audio responses
-  const toggleMute = () => {
-    setIsMuted(!isMuted);
-    if (!isMuted) {
-      audio.stopAudioPlayback();
+  // Stream text word by word
+  const streamText = async (text: string) => {
+    const words = text.split(' ');
+    setStreamingResponse("");
+    
+    for (let i = 0; i < words.length; i++) {
+      setStreamingResponse(prev => prev + (i > 0 ? ' ' : '') + words[i]);
+      await new Promise(resolve => setTimeout(resolve, 100)); // Adjust speed here
     }
+    
+    setIsStreaming(false);
   };
 
   const buildPlanSummary = (p: ParsedPlan) => {
@@ -230,43 +162,18 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
         size="icon"
         onClick={openChat}
         className="relative w-12 h-12 rounded-full"
-        title={audio.isSupported ? "Open voice assistant" : "Voice unsupported"}
-        disabled={!audio.isSupported}
+        title={recorder.isSupported ? "Start voice" : "Voice unsupported"}
+        disabled={!recorder.isSupported}
       >
         <Mic className="w-5 h-5" />
-        {audio.isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
-        {isLiveMode && <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full animate-pulse" />}
+        {recorder.isSupported && <span className="absolute inset-0 rounded-full animate-pulse bg-primary/20" />}
       </Button>
 
       {/* Voice Chat Dialog */}
-      <Dialog open={chatOpen} onOpenChange={(o) => { 
-        if (!o) { 
-          setChatOpen(false); 
-          if (isLiveMode) {
-            stopLiveMode();
-          }
-        } 
-      }}>
+      <Dialog open={chatOpen} onOpenChange={(o) => { if (!o) { setChatOpen(false); } }}>
         <DialogContent aria-describedby="va-desc" className="w-[95vw] max-w-lg max-h-[85vh] p-0 flex flex-col overflow-hidden">
           <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="flex items-center justify-between">
-              <span>Voice Assistant</span>
-              <div className="flex items-center gap-2">
-                {isLiveMode && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={toggleMute}
-                      title={isMuted ? "Unmute audio" : "Mute audio"}
-                    >
-                      {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-                    </Button>
-                    <span className="text-sm text-green-600 font-medium">● Live</span>
-                  </>
-                )}
-              </div>
-            </DialogTitle>
+            <DialogTitle>Voice Assistant</DialogTitle>
           </DialogHeader>
           <span id="va-desc" className="sr-only">Speak to add or remove items. After processing, you can accept to apply changes.</span>
           <div className="px-4 space-y-4 overflow-y-auto">
@@ -280,7 +187,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                   }`}
                 >
                   <span dangerouslySetInnerHTML={{ __html: m.content }} />
-                  {m.kind === 'plan' && (
+                  {m.kind === 'plan' && !isStreaming && (
                     <div className="mt-3 flex gap-2">
                       <Button onClick={executePlan} disabled={executing}>
                         <Check className="w-4 h-4 mr-1" /> Accept
@@ -300,59 +207,54 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 </div>
               </div>
             ))}
+            
+            {/* Show streaming response */}
+            {isStreaming && streamingResponse && (
+              <div className="flex justify-start">
+                <div className="whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white text-black border border-black">
+                  {streamingResponse}
+                  <span className="animate-pulse">|</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="border-t p-6 flex flex-col items-center justify-center gap-3">
-            {liveSession.state === "connecting" && (
+            {processing && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-label="Connecting" />
-                <span>Connecting to Gemini...</span>
+                <div className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" aria-label="Processing" />
+                <span>Processing…</span>
               </div>
             )}
             
             {transcript && (
               <div className="text-sm text-muted-foreground italic">
-                "{transcript}"
+                "You said: {transcript}"
               </div>
             )}
 
-            {!isLiveMode ? (
-              <div className="flex gap-3">
-                <Button
-                  onClick={startLiveMode}
-                  className="relative px-8 py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-medium"
-                  disabled={liveSession.state === "connecting" || !audio.isProcessorReady}
-                >
-                  <Mic className="w-5 h-5 mr-2" />
-                  Live Chat
-                  <span className="absolute inset-0 rounded-full animate-pulse bg-blue-500/10" />
-                </Button>
-              </div>
+            {recorder.state === 'recording' ? (
+              <Button
+                onClick={stopAndSummarize}
+                className="relative w-20 h-20 rounded-full bg-red-600 hover:bg-red-700 text-white text-base"
+                title="Done"
+              >
+                Done
+                <span className="absolute inset-0 rounded-full animate-ping bg-red-500/30" />
+              </Button>
             ) : (
-              <div className="flex gap-3">
-                <Button
-                  onClick={stopLiveMode}
-                  variant="outline"
-                  className="px-6 py-2 rounded-full"
-                >
-                  <Square className="w-4 h-4 mr-2" />
-                  Stop Live
-                </Button>
-                
-                <Button
-                  onClick={() => transcription.forceProcess()}
-                  className="px-6 py-2 rounded-full bg-green-600 hover:bg-green-700 text-white"
-                  disabled={!transcription.isTranscribing}
-                >
-                  Process Speech
-                </Button>
-                
-                {audio.isRecording && (
-                  <div className="flex items-center gap-2 text-sm text-green-600 font-medium">
-                    <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    Listening...
-                  </div>
+              <Button
+                onClick={() => recorder.start()}
+                title="Start"
+                className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center disabled:opacity-70"
+                disabled={processing || isStreaming}
+              >
+                {processing ? (
+                  <span className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Mic className="w-6 h-6" />
                 )}
-              </div>
+                <span className="absolute inset-0 rounded-full animate-pulse bg-green-500/10" />
+              </Button>
             )}
           </div>
         </DialogContent>

@@ -89,16 +89,34 @@ export default async function handler(req: Request): Promise<Response> {
       return new Response('Bad Request: missing audio or transcript', { status: 400 });
     }
 
-    // 2) Parse with LLM into plan (JSON mode)
+    // 2) Generate conversational response and parse with LLM
     const model = genAI.getGenerativeModel({ 
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.5-flash-lite',
       generationConfig: {
-        temperature: 1,
+        temperature: 0.7
+      }
+    });
+    
+    // First, generate a conversational response
+    const conversationPrompt = `You are a helpful grocery list assistant. The user said: "${transcript}"
+    
+    Respond in a friendly, conversational way. If they want to modify their grocery list, acknowledge what they want to do and be helpful. If it's not grocery-related, politely redirect them to grocery list tasks.
+    
+    Keep your response to 1-2 sentences.`;
+    
+    const conversationResult = await model.generateContent(conversationPrompt);
+    const conversationalResponse = conversationResult.response.text() || "I can help you with your grocery list!";
+    
+    // Then, parse into structured plan
+    const parseModel = genAI.getGenerativeModel({ 
+      model: 'gemini-2.5-flash-lite',
+      generationConfig: {
+        temperature: 0.1,
         responseMimeType: 'application/json'
       }
     });
     
-    const parseResult = await model.generateContent([
+    const parseResult = await parseModel.generateContent([
       SYSTEM_PROMPT,
       `User request: ${transcript}`
     ]);
@@ -112,7 +130,11 @@ export default async function handler(req: Request): Promise<Response> {
       parsed = { summary: 'AI could not parse request', plan: { add: [], remove: [], adjust: [] } };
     }
 
-    return new Response(JSON.stringify({ transcript, summary: parsed.summary, plan: parsed.plan }), {
+    return new Response(JSON.stringify({ 
+      transcript, 
+      summary: conversationalResponse, 
+      plan: parsed.plan || { add: [], remove: [], adjust: [] }
+    }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
