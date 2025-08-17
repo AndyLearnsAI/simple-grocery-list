@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { X, Plus, Minus, Check, Heart } from "lucide-react";
+import { X, Plus, Minus, Check, Heart, Link } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -122,7 +122,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       setAddedItems(alreadyAddedItems);
     } catch (error) {
-      console.error('Error checking existing items:', error);
+      // Silently handle error - non-critical functionality
     }
   };
 
@@ -151,7 +151,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       setSavedItems(alreadySavedItems);
     } catch (error) {
-      console.error('Error checking saved items:', error);
+      // Silently handle error - non-critical functionality
     }
   };
 
@@ -166,7 +166,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
 
       if (error) throw error;
 
-      console.log('Specials data:', data);
       setSpecials(data || []);
     } catch (error) {
       toast({
@@ -225,7 +224,9 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           .update({ 
             Quantity: newQuantity,
             price: item.price,
-            discount: item.discount
+            discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link
           })
           .eq('id', existingItem.id);
         if (error) throw error;
@@ -259,6 +260,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             order: newOrder,
             price: item.price,
             discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link,
             // Do not set default notes when adding from specials quick add
             notes: null
           })
@@ -344,6 +347,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             order: newOrder, // Add order
             price: item.price,
             discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: noteOverride ?? null
           });
 
@@ -443,6 +448,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             Quantity: newQuantity,
             price: item.price,
             discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: appendedNote
           })
           .eq('id', existingItem.id);
@@ -476,6 +483,8 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
             order: newOrder,
             price: item.price,
             discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link,
             notes: note && note.trim() ? note.trim() : null
           })
           .select('id')
@@ -633,10 +642,10 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                                      )}
 
                                      {/* Savings Box */}
-                                     {item.discount && (
+                                     {item.discount_percentage && (
                                        <div className="bg-yellow-400 border border-yellow-500 rounded p-1 shadow-sm max-w-[100px] sm:max-w-[120px] flex-shrink-0">
-                                         <p className="text-[10px] sm:text-[12px] font-bold text-gray-800 leading-tight text-center">
-                                           {item.discount}
+                                         <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
+                                           {item.discount_percentage} OFF
                                          </p>
                                        </div>
                                      )}
@@ -679,33 +688,105 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           setDetailQuantity(1);
         }}>
           <DialogContent className={`w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto ${isMobile && isNotesFocused ? 'pb-32' : ''}`}>
-            <DialogHeader className="relative">
+            <DialogHeader>
               <DialogTitle>{detailViewItem.item}</DialogTitle>
-              {/* Heart Icon */}
-              <Button
-                size="sm"
-                variant="ghost"
-                className="absolute top-0 right-0 p-2"
-                onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem, (detailNotes || undefined))}
-              >
-                <Heart 
-                  className={`w-5 h-5 ${
-                    detailViewItem && savedItems.has(detailViewItem.id)
-                      ? 'fill-red-500 text-red-500'
-                      : 'text-gray-400 hover:text-red-500'
-                  }`}
-                />
-              </Button>
+              {detailViewItem.category && (
+                <p className="text-sm text-muted-foreground mt-1">Category: {detailViewItem.category}</p>
+              )}
             </DialogHeader>
-            <div className="flex flex-col items-center gap-4 pt-4">
-              <img
-                src={detailViewItem.img || '/placeholder.svg'}
-                alt={detailViewItem.item}
-                className="w-40 h-40 object-contain rounded-lg"
-                onError={(e) => {
-                  e.currentTarget.src = '/placeholder.svg';
-                }}
-              />
+            {/* Main Content - Split Layout */}
+            <div className="flex flex-col gap-4 pt-4">
+              {/* Image and Notes Row */}
+              <div className="flex gap-4 px-4">
+                {/* Left Column - Image (50%) */}
+                <div className="flex-1 flex flex-col items-center">
+                  <div className="relative group">
+                    <img
+                      src={detailViewItem.img || '/placeholder.svg'}
+                      alt={detailViewItem.item}
+                      className={`w-40 h-40 object-contain rounded-lg ${detailViewItem.link ? 'cursor-pointer hover:opacity-80' : ''}`}
+                      onError={(e) => {
+                        e.currentTarget.src = '/placeholder.svg';
+                      }}
+                      onClick={() => {
+                        if (detailViewItem.link) {
+                          window.open(detailViewItem.link, '_blank');
+                        }
+                      }}
+                    />
+                    {detailViewItem.link && (
+                      <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
+                        <div 
+                          className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            window.open(detailViewItem.link, '_blank');
+                          }}
+                        >
+                          <Link className="h-4 w-4 text-green-700" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Right Column - Notes (50%) */}
+                <div className="flex-1 flex flex-col gap-4">
+                  {/* Quantity Counter */}
+                  <div className="flex items-center justify-center gap-4">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        if (detailQuantity > 1) {
+                          setDetailQuantity(detailQuantity - 1);
+                        }
+                      }}
+                      className="w-8 h-8 p-0"
+                      disabled={detailQuantity <= 1}
+                    >
+                      -
+                    </Button>
+                    <span className="text-lg font-semibold min-w-[2rem] text-center">{detailQuantity}</span>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        if (detailQuantity < 99) {
+                          setDetailQuantity(detailQuantity + 1);
+                        }
+                      }}
+                      className="w-8 h-8 p-0"
+                      disabled={detailQuantity >= 99}
+                    >
+                      +
+                    </Button>
+                  </div>
+                  
+                  {/* Notes Field */}
+                  <div className="w-full">
+                    <label className="block text-sm font-medium mb-1">Notes (optional)</label>
+                    <textarea
+                      className="w-full border rounded-md p-2 text-sm"
+                      rows={3}
+                      placeholder="Add a note to save with this item"
+                      value={detailNotes}
+                      onChange={(e) => setDetailNotes(e.target.value)}
+                      ref={notesTextareaRef}
+                      onFocus={() => {
+                        // Allow the dialog to scroll and center the notes when keyboard opens
+                        setIsNotesFocused(true);
+                        setTimeout(() => {
+                          notesTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }, 50);
+                      }}
+                      onBlur={() => setIsNotesFocused(false)}
+                    />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Price and Savings Section */}
               <div className="w-full px-4 min-w-0">
                 {detailViewItem.price && (
                   <div className="mb-4">
@@ -722,72 +803,48 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                       </div>
                       
                       {/* Savings Box */}
-                      {detailViewItem.discount && (
+                      {detailViewItem.discount_percentage && (
                         <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
-                          <p className="text-xs sm:text-sm font-bold text-gray-800 leading-tight text-center">
-                            {detailViewItem.discount}
+                          <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
+                            {detailViewItem.discount_percentage} OFF
                           </p>
                         </div>
                       )}
                     </div>
                   </div>
                 )}
+                
+                {/* Discount Description */}
+                {detailViewItem.discount && (
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-gray-700 font-medium">
+                      {detailViewItem.discount}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
+            
+            {/* Action Buttons */}
             <div className="flex flex-col items-center gap-4 mt-4">
-              {/* Quantity Counter */}
-              <div className="flex items-center gap-4">
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    if (detailQuantity > 1) {
-                      setDetailQuantity(detailQuantity - 1);
-                    }
-                  }}
-                  className="w-8 h-8 p-0"
-                  disabled={detailQuantity <= 1}
-                >
-                  -
-                </Button>
-                <span className="text-lg font-semibold min-w-[2rem] text-center">{detailQuantity}</span>
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    if (detailQuantity < 99) {
-                      setDetailQuantity(detailQuantity + 1);
-                    }
-                  }}
-                  className="w-8 h-8 p-0"
-                  disabled={detailQuantity >= 99}
-                >
-                  +
-                </Button>
-              </div>
-              {/* Notes Field */}
-              <div className="w-full px-4">
-                <label className="block text-sm font-medium mb-1">Notes (optional)</label>
-                <textarea
-                  className="w-full border rounded-md p-2 text-sm"
-                  rows={3}
-                  placeholder="Add a note to save with this item"
-                  value={detailNotes}
-                  onChange={(e) => setDetailNotes(e.target.value)}
-                  ref={notesTextareaRef}
-                  onFocus={() => {
-                    // Allow the dialog to scroll and center the notes when keyboard opens
-                    setIsNotesFocused(true);
-                    setTimeout(() => {
-                      notesTextareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }, 50);
-                  }}
-                  onBlur={() => setIsNotesFocused(false)}
-                />
-              </div>
               
               {/* Action Buttons */}
-              <div className="flex gap-2 justify-center w-full">
+              <div className="flex gap-2 justify-center w-full items-center">
+                {/* Heart Icon */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="p-2"
+                  onClick={() => detailViewItem && handleToggleSavedItem(detailViewItem, (detailNotes || undefined))}
+                >
+                  <Heart 
+                    className={`w-5 h-5 ${
+                      detailViewItem && savedItems.has(detailViewItem.id)
+                        ? 'fill-red-500 text-red-500'
+                        : 'text-gray-400 hover:text-red-500'
+                    }`}
+                  />
+                </Button>
                 <Button onClick={() => {
                   handleAddItem(detailViewItem, detailQuantity, detailNotes || undefined);
                   // Also update the addedItems state to show tick in specials modal

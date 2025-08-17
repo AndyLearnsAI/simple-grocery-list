@@ -22,6 +22,12 @@ export type Database = {
           Quantity: number
           user_id: string | null
           order: number
+          price: string | null
+          discount: string | null
+          discount_percentage: string | null
+          notes: string | null
+          img: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -30,6 +36,12 @@ export type Database = {
           Quantity?: number
           user_id?: string | null
           order?: number
+          price?: string | null
+          discount?: string | null
+          discount_percentage?: string | null
+          notes?: string | null
+          img?: string | null
+          link?: string | null
         }
         Update: {
           created_at?: string
@@ -38,6 +50,12 @@ export type Database = {
           Quantity?: number
           user_id?: string | null
           order?: number
+          price?: string | null
+          discount?: string | null
+          discount_percentage?: string | null
+          notes?: string | null
+          img?: string | null
+          link?: string | null
         }
         Relationships: []
       }
@@ -79,7 +97,9 @@ export type Database = {
           img: string | null
           price: string | null
           discount: string | null
+          discount_percentage: string | null
           notes: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -91,6 +111,7 @@ export type Database = {
           img?: string | null
           price?: string | null
           discount?: string | null
+          discount_percentage?: number | null
           notes?: string | null
         }
         Update: {
@@ -103,6 +124,7 @@ export type Database = {
           img?: string | null
           price?: string | null
           discount?: string | null
+          discount_percentage?: number | null
           notes?: string | null
         }
         Relationships: []
@@ -118,8 +140,9 @@ export type Database = {
           discount: string | null
           catalogue_date: string | null
           on_special: boolean
-          discount_percentage: number | null
+          discount_percentage: string | null
           img: string | null
+          link: string | null
         }
         Insert: {
           created_at?: string
@@ -131,8 +154,9 @@ export type Database = {
           discount?: string | null
           catalogue_date?: string | null
           on_special?: boolean
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           img?: string | null
+          link?: string | null
         }
         Update: {
           created_at?: string
@@ -144,8 +168,9 @@ export type Database = {
           discount?: string | null
           catalogue_date?: string | null
           on_special?: boolean
-          discount_percentage?: number | null
+          discount_percentage?: string | null
           img?: string | null
+          link?: string | null
         }
         Relationships: []
       }

@@ -21,7 +21,9 @@ interface SavedlistItem {
   order: number;
   price?: string | null;
   discount?: string | null;
+  discount_percentage?: string | null;
   notes?: string | null;
+  link?: string | null;
 }
 
 interface SelectedSavedlistItem extends SavedlistItem {
@@ -67,8 +69,6 @@ function TouchSortableSavedlistItem({
   const [editValue, setEditValue] = useState(item.Item);
   const [editError, setEditError] = useState("");
   const [editQuantity, setEditQuantity] = useState(item.selectedQuantity);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesValue, setNotesValue] = useState(item.notes || "");
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
@@ -164,38 +164,6 @@ function TouchSortableSavedlistItem({
     setEditQuantity(clampedValue);
   };
 
-  const handleNotesSave = async () => {
-    try {
-      const user = await supabase.auth.getUser();
-      if (!user.data.user) return;
-
-      const { error } = await supabase
-        .from('SavedlistItems')
-        .update({ notes: notesValue.trim() || null })
-        .eq('id', item.id)
-        .eq('user_id', user.data.user.id);
-
-      if (error) throw error;
-
-      // Close the popover
-      setNotesOpen(false);
-      
-      // Refresh the items to show updated notes
-      // This will be handled by the parent component's fetchSavedlistItems
-      
-      toast({
-        title: "Notes updated",
-        description: "Item notes have been saved",
-      });
-    } catch (error) {
-      console.error('Error updating notes:', error);
-      toast({
-        title: "Error updating notes",
-        description: "Failed to save notes",
-        variant: "destructive",
-      });
-    }
-  };
 
   const calculateDestination = (deltaY: number) => {
     const itemHeight = itemRef.current?.offsetHeight || 80;
@@ -307,7 +275,7 @@ function TouchSortableSavedlistItem({
   return (
     <Card 
       ref={itemRef}
-      className={`py-4 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-4 px-4 shadow-card hover:shadow-elegant relative ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -318,14 +286,16 @@ function TouchSortableSavedlistItem({
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
         transition: isDragging ? 'none' : 'none',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3 flex-1">
+      <div className="flex items-start w-full min-w-0 max-w-full">
+        <div className="flex items-start gap-3 flex-1 min-w-0 max-w-full overflow-hidden">
           {/* Drag Handle */}
           <div
             ref={dragRef}
-            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none ${
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none flex-shrink-0 mt-1 ${
               isEditing || isQuantityEditing ? 'opacity-50 pointer-events-none' : ''
             }`}
             onTouchStart={handleTouchStart}
@@ -339,7 +309,7 @@ function TouchSortableSavedlistItem({
           
           {/* Quantity Counter - Left side */}
           {isQuantityEditing ? (
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <div className="grid grid-cols-3 grid-rows-3 gap-1 w-20 h-20 items-center justify-center">
                 <div></div>
                 <Button
@@ -394,7 +364,7 @@ function TouchSortableSavedlistItem({
             <button
               type="button"
               onClick={() => setIsQuantityEditing(true)}
-              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2"
+              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2 flex-shrink-0 mt-1"
               title="Edit quantity"
             >
               {item.selectedQuantity}
@@ -402,7 +372,7 @@ function TouchSortableSavedlistItem({
           )}
           
           {/* Image with sale tag overlay */}
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative" onClick={() => onImageClick(item)}>
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative mt-1" onClick={() => onImageClick(item)}>
             {item.img ? (
               <img
                 src={item.img}
@@ -415,6 +385,7 @@ function TouchSortableSavedlistItem({
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
               </div>
             )}
+
 
             {/* Sale tag positioned to hover over the image button */}
             {item.discount && item.discount.trim() && (
@@ -434,7 +405,7 @@ function TouchSortableSavedlistItem({
                   onChange={(e) => setEditValue(e.target.value)}
                   onBlur={handleEditSave}
                   onKeyDown={handleEditKeyDown}
-                  className="h-8 text-sm"
+                  className="h-8 text-sm w-full"
                   maxLength={99}
                 />
                 {editError && (
@@ -442,65 +413,18 @@ function TouchSortableSavedlistItem({
                 )}
               </div>
             ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleEditStart}
-                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent"
-              >
-                {item.Item}
-              </Button>
+              <div className="w-full">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEditStart}
+                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 leading-tight"
+                >
+                  <span className="break-words whitespace-normal text-left block w-full">{item.Item}</span>
+                </Button>
+              </div>
             )}
           </div>
-        </div>
-        
-        {/* Notes Icon - Far right */}
-        <div className="flex items-center gap-2">
-          <Popover open={notesOpen} onOpenChange={setNotesOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className={`h-6 w-6 p-0 mr-2 ${
-                  item.notes && item.notes.trim() 
-                    ? 'text-green-600' 
-                    : 'text-muted-foreground/40'
-                }`}
-                title={item.notes && item.notes.trim() ? "Edit notes" : "Add notes"}
-              >
-                <FileText className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Textarea
-                    placeholder="Enter notes..."
-                    value={notesValue}
-                    onChange={(e) => setNotesValue(e.target.value)}
-                    className="min-h-[80px]"
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setNotesOpen(false)}
-                    className="flex-1"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={handleNotesSave}
-                    className="flex-1"
-                  >
-                    Save Notes
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
         </div>
       </div>
     </Card>
@@ -540,7 +464,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       setSavedlistItems(savedlistItemsWithSelection);
     } catch (error) {
-      console.error('Error fetching saved list items:', error);
+      // Error already handled by UI state
       toast({
         title: "Error loading saved list items",
         description: "Failed to load saved list items from database",
@@ -574,7 +498,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       setSavedlistItems(updatedItems);
       await updateItemsOrder(updatedItems);
     } catch (error) {
-      console.error('Error reordering items:', error);
+      // Error in reordering - silently fail
       toast({
         title: "Error reordering",
         description: "Failed to reorder items",
@@ -674,7 +598,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       return true;
     } catch (error) {
-      console.error('Error updating item name:', error);
+      // Error updating item name - return false for proper handling
       toast({
         title: "Error updating item",
         description: "Failed to update item name",
@@ -879,7 +803,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             .single();
 
           if (insertError) {
-            console.error('Error inserting item:', insertError);
+            // Error inserting item - already handled by toast below
             if (insertError.message.includes('duplicate key') || insertError.message.includes('unique constraint')) {
               throw new Error(`Item "${selectedItem.Item}" already exists in your list. Try updating the quantity instead.`);
             }
@@ -1011,7 +935,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       });
 
     } catch (error) {
-      console.error('Error in sortItems function:', error);
+      // Error in sorting - silently fail
       toast({
         title: "Error sorting items",
         description: "Failed to sort saved list",
@@ -1128,7 +1052,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             )}
 
             {/* Saved List Items */}
-            <div className={`space-y-0 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            <div className={`space-y-2 max-h-96 overflow-y-auto overflow-x-hidden w-full ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
               {filteredItems.map((item, index) => (
                 <TouchSortableSavedlistItem
                   key={item.id}

@@ -22,9 +22,11 @@ interface GroceryItem {
   Quantity?: number;
   price?: string | null;
   discount?: string | null;
+  discount_percentage?: string | null;
   notes?: string | null;
   user_id?: string;
   img?: string | null;
+  link?: string | null;
   order: number;
 }
 
@@ -494,7 +496,6 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
       setItems(updatedItems);
       await updateItemsOrder(updatedItems);
     } catch (error) {
-      console.error('Error reordering items:', error);
       toast({
         title: "Error reordering",
         description: "Failed to reorder items",

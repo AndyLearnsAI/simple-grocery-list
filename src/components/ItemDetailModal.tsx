@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Edit3, Trash2 } from "lucide-react";
+import { Edit3, Trash2, Link } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 
 interface ItemDetailModalProps {
@@ -18,7 +18,9 @@ interface ItemDetailModalProps {
     img?: string | null;
     price?: string | null;
     discount?: string | null;
+    discount_percentage?: string | null;
     notes?: string | null;
+    link?: string | null;
   };
   tableName: 'Grocery list' | 'SavedlistItems';
   onUpdate: () => void;
@@ -27,6 +29,7 @@ interface ItemDetailModalProps {
 export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: ItemDetailModalProps) {
   const [quantity, setQuantity] = useState(item.Quantity || 1);
   const [price, setPrice] = useState(item.price || "");
+  const [discountPercentage, setDiscountPercentage] = useState(item.discount_percentage || "");
   const [discount, setDiscount] = useState(item.discount || "");
   const [notes, setNotes] = useState(item.notes || "");
   const [isEditingName, setIsEditingName] = useState(false);
@@ -37,6 +40,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
   useEffect(() => {
     setQuantity(item.Quantity || 1);
     setPrice(item.price || "");
+    setDiscountPercentage(item.discount_percentage || "");
     setDiscount(item.discount || "");
     setNotes(item.notes || "");
     setNameValue(item.Item);
@@ -104,6 +108,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         .update({
           Quantity: quantity,
           price: price,
+          discount_percentage: discountPercentage || null,
           discount: discount,
           notes: notes,
         })
@@ -164,6 +169,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                       user_id: user.id,
                       img: (snapshot as any).img || null,
                       price: (snapshot as any).price || null,
+                      discount_percentage: (snapshot as any).discount_percentage || null,
                       discount: (snapshot as any).discount || null,
                       notes: (snapshot as any).notes || null,
                       order: newOrder,
@@ -187,6 +193,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                       user_id: user.id,
                       img: (snapshot as any).img || null,
                       price: (snapshot as any).price || null,
+                      discount_percentage: (snapshot as any).discount_percentage || null,
                       discount: (snapshot as any).discount || null,
                       notes: (snapshot as any).notes || null,
                       order: newOrder,
@@ -260,12 +267,32 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         </DialogHeader>
         <div className="flex flex-col items-center gap-4 pt-4">
           {item.img ? (
-            <img
-              src={item.img}
-              alt={item.Item}
-              className="w-32 h-32 object-contain rounded-lg"
-              onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
-            />
+            <div className="relative group">
+              <img
+                src={item.img}
+                alt={item.Item}
+                className={`w-32 h-32 object-contain rounded-lg ${item.link ? 'cursor-pointer hover:opacity-80' : ''}`}
+                onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
+                onClick={() => {
+                  if (item.link) {
+                    window.open(item.link, '_blank');
+                  }
+                }}
+              />
+              {item.link && (
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
+                  <div 
+                    className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.open(item.link, '_blank');
+                    }}
+                  >
+                    <Link className="h-4 w-4 text-green-700" />
+                  </div>
+                </div>
+              )}
+            </div>
           ) : (
             <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center">
               <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart text-gray-400"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.16"/></svg>
@@ -293,6 +320,15 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
             <div className="flex items-center">
               <label htmlFor="price" className="w-1/4 text-sm font-medium pr-2">Price</label>
               <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </div>
+            <div className="flex items-center">
+              <label htmlFor="discount_percentage" className="w-1/4 text-sm font-medium pr-2">Discount %</label>
+              <Input 
+                id="discount_percentage" 
+                type="text" 
+                value={discountPercentage} 
+                onChange={(e) => setDiscountPercentage(e.target.value)}
+              />
             </div>
             <div className="flex items-center">
               <label htmlFor="discount" className="w-1/4 text-sm font-medium pr-2">Discount</label>
