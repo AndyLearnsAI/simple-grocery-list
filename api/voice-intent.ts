@@ -1,6 +1,6 @@
 export const config = { runtime: 'edge' };
 
-const OPENAI_BASE = 'https://api.openai.com/v1';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
@@ -41,10 +41,12 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
-    return new Response('Server misconfigured: missing OPENAI_API_KEY', { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+    return new Response('Server misconfigured: missing GEMINI_API_KEY', { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
   }
+  
+  const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
     let providedTranscript: any = null;
@@ -62,20 +64,25 @@ export default async function handler(req: Request): Promise<Response> {
     // 1) Transcribe (if audio present), otherwise use provided transcript
     let transcript = '';
     if (audio instanceof Blob && audio.size > 0) {
-      const transcribeForm = new FormData();
-      transcribeForm.append('file', audio, 'voice.webm');
-      transcribeForm.append('model', 'gpt-4o-mini-transcribe');
-      const trRes = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}` },
-        body: transcribeForm,
-      });
-      if (!trRes.ok) {
-        const errTxt = await trRes.text();
-        return new Response(`Transcription failed: ${errTxt}`, { status: 500 });
-      }
-      const trJson: any = await trRes.json();
-      transcript = trJson.text || '';
+      // Convert audio blob to base64
+      const audioBuffer = await audio.arrayBuffer();
+      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+      
+      // Use Gemini for transcription
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = "Please transcribe this audio to text. Return only the transcribed text.";
+      
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: audioBase64,
+            mimeType: audio.type || 'audio/webm'
+          }
+        }
+      ]);
+      
+      transcript = result.response.text() || '';
     } else if (typeof providedTranscript === 'string' && providedTranscript.trim()) {
       transcript = providedTranscript.trim();
     } else {
@@ -83,28 +90,20 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     // 2) Parse with LLM into plan (JSON mode)
-    const chatRes = await fetch(`${OPENAI_BASE}/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-5-nano',
-        response_format: { type: 'json_object' },
-        messages: [
-          { role: 'system', content: SYSTEM_PROMPT },
-          { role: 'user', content: transcript },
-        ],
-        temperature: 1
-      }),
+    const model = genAI.getGenerativeModel({ 
+      model: 'gemini-1.5-flash',
+      generationConfig: {
+        temperature: 1,
+        responseMimeType: 'application/json'
+      }
     });
-    if (!chatRes.ok) {
-      const errTxt = await chatRes.text();
-      return new Response(`LLM parse failed: ${errTxt}`, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
-    }
-    const chatJson: any = await chatRes.json();
-    const content = chatJson.choices?.[0]?.message?.content || '{}';
+    
+    const parseResult = await model.generateContent([
+      SYSTEM_PROMPT,
+      `User request: ${transcript}`
+    ]);
+    
+    const content = parseResult.response.text() || '{}';
 
     let parsed: any;
     try {
