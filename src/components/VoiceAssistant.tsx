@@ -52,11 +52,11 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const startLiveMode = async () => {
     await audio.resumeAudioContext();
     
-    const apiKey = process.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
       setMessages(prev => [...prev, { 
         role: "assistant", 
-        content: "Gemini API key not configured. Please add GEMINI_API_KEY to your environment.", 
+        content: "Gemini API key not configured. Please add VITE_GEMINI_API_KEY to your .env file.", 
         kind: "text" 
       }]);
       return;
