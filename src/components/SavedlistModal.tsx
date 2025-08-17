@@ -290,12 +290,12 @@ function TouchSortableSavedlistItem({
         overflow: 'hidden',
       }}
     >
-      <div className="flex items-center w-full min-w-0 max-w-full">
-        <div className="flex items-center gap-3 flex-1 min-w-0 max-w-full overflow-hidden">
+      <div className="flex items-start w-full min-w-0 max-w-full">
+        <div className="flex items-start gap-3 flex-1 min-w-0 max-w-full overflow-hidden">
           {/* Drag Handle */}
           <div
             ref={dragRef}
-            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none flex-shrink-0 ${
+            className={`h-6 w-6 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none flex-shrink-0 mt-1 ${
               isEditing || isQuantityEditing ? 'opacity-50 pointer-events-none' : ''
             }`}
             onTouchStart={handleTouchStart}
@@ -364,7 +364,7 @@ function TouchSortableSavedlistItem({
             <button
               type="button"
               onClick={() => setIsQuantityEditing(true)}
-              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2 flex-shrink-0"
+              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2 flex-shrink-0 mt-1"
               title="Edit quantity"
             >
               {item.selectedQuantity}
@@ -372,7 +372,7 @@ function TouchSortableSavedlistItem({
           )}
           
           {/* Image with sale tag overlay */}
-          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative" onClick={() => onImageClick(item)}>
+          <div className="w-8 h-8 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0 cursor-pointer relative mt-1" onClick={() => onImageClick(item)}>
             {item.img ? (
               <img
                 src={item.img}
@@ -396,7 +396,7 @@ function TouchSortableSavedlistItem({
           </div>
           
           {/* Item Name with inline editing */}
-          <div className="flex-1 min-w-0 overflow-hidden">
+          <div className="flex-1 min-w-0">
             {isEditing ? (
               <div className="space-y-1">
                 <Input
@@ -413,14 +413,14 @@ function TouchSortableSavedlistItem({
                 )}
               </div>
             ) : (
-              <div className="w-full overflow-hidden">
+              <div className="w-full">
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleEditStart}
-                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 max-w-full overflow-hidden"
+                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 leading-tight"
                 >
-                  <span className="truncate block max-w-full">{item.Item}</span>
+                  <span className="break-words whitespace-normal text-left block w-full">{item.Item}</span>
                 </Button>
               </div>
             )}
