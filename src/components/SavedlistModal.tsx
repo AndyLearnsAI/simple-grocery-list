@@ -394,7 +394,7 @@ function TouchSortableSavedlistItem({
           </div>
           
           {/* Item Name with inline editing */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 max-w-[calc(100%-120px)]">
             {isEditing ? (
               <div className="space-y-1">
                 <Input
@@ -415,9 +415,9 @@ function TouchSortableSavedlistItem({
                 variant="ghost"
                 size="sm"
                 onClick={handleEditStart}
-                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent w-full justify-start overflow-hidden"
+                className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0"
               >
-                <span className="truncate">{item.Item}</span>
+                <span className="truncate block w-full text-left">{item.Item}</span>
               </Button>
             )}
           </div>
