@@ -275,7 +275,7 @@ function TouchSortableSavedlistItem({
   return (
     <Card 
       ref={itemRef}
-      className={`py-4 px-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-4 px-4 shadow-card hover:shadow-elegant relative ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -286,10 +286,12 @@ function TouchSortableSavedlistItem({
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
         transition: isDragging ? 'none' : 'none',
+        maxWidth: '100%',
+        overflow: 'hidden',
       }}
     >
-      <div className="flex items-center w-full min-w-0">
-        <div className="flex items-center gap-3 flex-1 min-w-0">
+      <div className="flex items-center w-full min-w-0 max-w-full">
+        <div className="flex items-center gap-3 flex-1 min-w-0 max-w-full overflow-hidden">
           {/* Drag Handle */}
           <div
             ref={dragRef}
@@ -394,7 +396,7 @@ function TouchSortableSavedlistItem({
           </div>
           
           {/* Item Name with inline editing */}
-          <div className="flex-1 min-w-0 max-w-[calc(100%-120px)]">
+          <div className="flex-1 min-w-0 overflow-hidden">
             {isEditing ? (
               <div className="space-y-1">
                 <Input
@@ -403,7 +405,7 @@ function TouchSortableSavedlistItem({
                   onChange={(e) => setEditValue(e.target.value)}
                   onBlur={handleEditSave}
                   onKeyDown={handleEditKeyDown}
-                  className="h-8 text-sm"
+                  className="h-8 text-sm w-full"
                   maxLength={99}
                 />
                 {editError && (
@@ -411,14 +413,16 @@ function TouchSortableSavedlistItem({
                 )}
               </div>
             ) : (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleEditStart}
-                className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0"
-              >
-                <span className="truncate block w-full text-left">{item.Item}</span>
-              </Button>
+              <div className="w-full overflow-hidden">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleEditStart}
+                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 max-w-full overflow-hidden"
+                >
+                  <span className="truncate block max-w-full">{item.Item}</span>
+                </Button>
+              </div>
             )}
           </div>
         </div>
@@ -1048,7 +1052,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             )}
 
             {/* Saved List Items */}
-            <div className={`space-y-2 max-h-96 overflow-y-auto overflow-x-hidden ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            <div className={`space-y-2 max-h-96 overflow-y-auto overflow-x-hidden w-full ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
               {filteredItems.map((item, index) => (
                 <TouchSortableSavedlistItem
                   key={item.id}
