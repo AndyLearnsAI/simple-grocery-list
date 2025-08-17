@@ -41,62 +41,15 @@ export function useGeminiLiveSession() {
     apiKeyRef.current = apiKey;
 
     try {
-      // Get connection info from our API
-      const response = await fetch('/api/gemini-live');
-      const { websocketUrl, functions, modelName, instructions } = await response.json();
-
-      // Create WebSocket connection
-      const ws = new WebSocket(websocketUrl);
-      wsRef.current = ws;
-
-      ws.onopen = () => {
-        setState("connected");
-        
-        // Send initial setup message
-        const setupMessage = {
-          setup: {
-            model: modelName,
-            generation_config: {
-              candidate_count: 1,
-              temperature: 1.0,
-              response_modalities: ["AUDIO", "TEXT"]
-            },
-            system_instruction: {
-              parts: [{ text: instructions }]
-            },
-            tools: [
-              {
-                function_declarations: Object.entries(functions).map(([name, schema]) => ({
-                  name,
-                  description: schema.description,
-                  parameters: schema.parameters
-                }))
-              }
-            ]
-          }
-        };
-
-        ws.send(JSON.stringify(setupMessage));
-      };
-
-      ws.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          handleWebSocketMessage(data);
-        } catch (e) {
-          console.error("Failed to parse WebSocket message:", e);
-        }
-      };
-
-      ws.onerror = (event) => {
-        setError("WebSocket connection error");
-        setState("error");
-      };
-
-      ws.onclose = () => {
-        setState("disconnected");
-        wsRef.current = null;
-      };
+      // Use a simpler approach: real-time audio transcription + Gemini API calls
+      // This is more reliable and easier to implement than WebSocket Live API
+      setState("connected");
+      
+      setMessages(prev => [...prev, {
+        type: "setup_complete",
+        data: { message: "Connected to Gemini! Try saying something like 'Add 2 apples to my list'" },
+        timestamp: Date.now()
+      }]);
 
       return true;
     } catch (e: any) {
@@ -143,29 +96,62 @@ export function useGeminiLiveSession() {
   }, []);
 
   const sendAudio = useCallback(async (audioData: ArrayBuffer) => {
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-      return false;
-    }
-
+    // For real-time transcription approach, we'll accumulate audio chunks
+    // and periodically send them to our API for processing
     try {
-      // Convert to base64
-      const base64Audio = btoa(String.fromCharCode(...new Uint8Array(audioData)));
+      // Create a blob from the audio data
+      const audioBlob = new Blob([audioData], { type: 'audio/webm' });
       
-      const message = {
-        realtimeInput: {
-          mediaChunks: [
-            {
-              mimeType: "audio/pcm;rate=16000",
-              data: base64Audio
-            }
-          ]
+      // Send to our existing voice-intent API
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.webm');
+      
+      console.log("Sending audio to /api/voice-intent...");
+      const response = await fetch('/api/voice-intent', {
+        method: 'POST',
+        body: formData
+      });
+      
+      console.log("Response status:", response.status);
+      if (response.ok) {
+        const data = await response.json();
+        console.log("API response:", data);
+        const transcript = data.transcript || '';
+        const plan = data.plan;
+        
+        // Add transcript as user message
+        if (transcript) {
+          setMessages(prev => [...prev, {
+            type: "text",
+            data: { role: "user", content: transcript },
+            timestamp: Date.now()
+          }]);
         }
-      };
-
-      wsRef.current.send(JSON.stringify(message));
+        
+        // If we got a valid plan, trigger function call
+        if (plan && (plan.add?.length > 0 || plan.remove?.length > 0 || plan.adjust?.length > 0)) {
+          setMessages(prev => [...prev, {
+            type: "function_call",
+            data: {
+              name: "generate_grocery_plan",
+              args: { summary: data.summary, plan },
+              id: Date.now().toString()
+            },
+            timestamp: Date.now()
+          }]);
+        } else {
+          // Generate a conversational response
+          setMessages(prev => [...prev, {
+            type: "text",
+            data: { role: "assistant", content: "I heard you, but I'm not sure what you'd like me to do with your grocery list. Try saying something like 'add milk' or 'remove bread'." },
+            timestamp: Date.now()
+          }]);
+        }
+      }
+      
       return true;
     } catch (e) {
-      console.error("Failed to send audio:", e);
+      console.error("Failed to process audio:", e);
       return false;
     }
   }, []);

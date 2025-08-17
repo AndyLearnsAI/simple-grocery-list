@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Card } from "@/components/ui/card";
 import { useRealTimeAudio } from "@/hooks/useRealTimeAudio";
 import { useGeminiLiveSession, type LiveSessionMessage, type FunctionCall } from "@/hooks/useGeminiLiveSession";
+import { useRealTimeTranscription } from "@/hooks/useRealTimeTranscription";
 import { parseVoiceToPlan, type ParsedPlan } from "@/services/voiceIntent";
 import type { GroceryChecklistHandle } from "@/components/GroceryChecklist";
 
@@ -15,6 +16,7 @@ type VoiceAssistantProps = {
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const audio = useRealTimeAudio();
   const liveSession = useGeminiLiveSession();
+  const transcription = useRealTimeTranscription();
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   
   const [chatOpen, setChatOpen] = useState(false);
@@ -66,9 +68,19 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     if (connected) {
       setIsLiveMode(true);
       
+      // Start real-time transcription
+      transcription.startTranscribing(
+        (transcript) => {
+          setTranscript(transcript);
+        },
+        (audioData) => {
+          liveSession.sendAudio(audioData);
+        }
+      );
+
       // Start real-time audio streaming
       const success = await audio.startRecording((audioChunk) => {
-        liveSession.sendAudio(audioChunk);
+        transcription.processAudioChunk(audioChunk);
       });
 
       if (!success) {
@@ -88,8 +100,9 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   };
 
   // Stop live conversation mode
-  const stopLiveMode = () => {
+  const stopLiveMode = async () => {
     audio.stopRecording();
+    await transcription.stopTranscribing();
     liveSession.disconnect();
     setIsLiveMode(false);
     setTranscript("");
@@ -103,11 +116,21 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     const handleMessage = (message: LiveSessionMessage) => {
       switch (message.type) {
         case "text":
-          setMessages(prev => [...prev, {
-            role: "assistant",
-            content: message.data,
-            kind: "text"
-          }]);
+          // Handle both user and assistant messages
+          const messageData = message.data;
+          if (typeof messageData === 'string') {
+            setMessages(prev => [...prev, {
+              role: "assistant",
+              content: messageData,
+              kind: "text"
+            }]);
+          } else if (messageData?.role && messageData?.content) {
+            setMessages(prev => [...prev, {
+              role: messageData.role,
+              content: messageData.content,
+              kind: "text"
+            }]);
+          }
           break;
 
         case "audio":
@@ -313,6 +336,14 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 >
                   <Square className="w-4 h-4 mr-2" />
                   Stop Live
+                </Button>
+                
+                <Button
+                  onClick={() => transcription.forceProcess()}
+                  className="px-6 py-2 rounded-full bg-green-600 hover:bg-green-700 text-white"
+                  disabled={!transcription.isTranscribing}
+                >
+                  Process Speech
                 </Button>
                 
                 {audio.isRecording && (
