@@ -275,7 +275,7 @@ function TouchSortableSavedlistItem({
   return (
     <Card 
       ref={itemRef}
-      className={`py-4 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-4 px-4 shadow-card hover:shadow-elegant relative overflow-hidden ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -288,7 +288,7 @@ function TouchSortableSavedlistItem({
         transition: isDragging ? 'none' : 'none',
       }}
     >
-      <div className="flex items-center w-full">
+      <div className="flex items-center w-full min-w-0">
         <div className="flex items-center gap-3 flex-1 min-w-0">
           {/* Drag Handle */}
           <div
@@ -415,9 +415,9 @@ function TouchSortableSavedlistItem({
                 variant="ghost"
                 size="sm"
                 onClick={handleEditStart}
-                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent w-full justify-start"
+                className="h-auto p-0 text-left font-medium text-sm break-words text-foreground hover:bg-transparent w-full justify-start overflow-hidden"
               >
-                {item.Item}
+                <span className="truncate">{item.Item}</span>
               </Button>
             )}
           </div>
@@ -1048,7 +1048,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             )}
 
             {/* Saved List Items */}
-            <div className={`space-y-0 max-h-96 overflow-y-auto ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            <div className={`space-y-2 max-h-96 overflow-y-auto overflow-x-hidden ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
               {filteredItems.map((item, index) => (
                 <TouchSortableSavedlistItem
                   key={item.id}
