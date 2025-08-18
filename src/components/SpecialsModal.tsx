@@ -23,6 +23,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { QuantitySelector } from "./QuantitySelector";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { parseSmartSyntax } from "@/lib/utils";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface SpecialsItem {
   id: number;
@@ -71,8 +79,25 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   useEffect(() => {
     if (isOpen) {
       fetchSpecialsItems();
+      // Push state to history to handle back button
+      window.history.pushState({ modal: 'specials' }, '');
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal !== 'specials') {
+        // Back button pressed, close modal
+        onClose();
+        onModalClose?.();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isOpen, onClose, onModalClose]);
 
   useEffect(() => {
     if (isOpen && specials.length > 0) {
@@ -85,10 +110,22 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
     if (!carouselApi) return;
 
     setTotalPages(carouselApi.scrollSnapList().length);
-    setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+    
+    // Restore saved page on initial load
+    const savedPage = localStorage.getItem('specials-last-page');
+    if (savedPage && parseInt(savedPage) > 0 && parseInt(savedPage) <= carouselApi.scrollSnapList().length) {
+      const pageIndex = parseInt(savedPage) - 1;
+      carouselApi.scrollTo(pageIndex);
+      setCurrentPage(parseInt(savedPage));
+    } else {
+      setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+    }
 
     const onSelect = () => {
-      setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+      const newPage = carouselApi.selectedScrollSnap() + 1;
+      setCurrentPage(newPage);
+      // Save current page to localStorage
+      localStorage.setItem('specials-last-page', newPage.toString());
     };
 
     carouselApi.on("select", onSelect);
@@ -195,6 +232,12 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
     setIsDetailViewOpen(true);
     // Default notes to empty; user can add a note explicitly in detail view
     setDetailNotes("");
+  };
+
+  const goToPage = (pageNumber: number) => {
+    if (carouselApi && pageNumber >= 1 && pageNumber <= totalPages) {
+      carouselApi.scrollTo(pageNumber - 1);
+    }
   };
 
   const handleAddItemFromCard = async (item: SpecialsItem) => {
@@ -440,7 +483,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
         originalQuantity = existingItem.Quantity || 0;
         const newQuantity = originalQuantity + quantity;
         // Only append provided note; do not auto-add defaults
-        const existingItemNotes = (existingItem as any)?.notes as string | null | undefined;
+        const existingItemNotes = (existingItem as { notes?: string | null })?.notes;
         const appendedNote = note && note.trim() ? (existingItemNotes ? `${existingItemNotes}, ${note.trim()}` : note.trim()) : (existingItemNotes ?? null);
         const { error } = await supabase
           .from('Grocery list')
@@ -667,8 +710,34 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
                 <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
               </div>
-              <div className="text-center text-sm text-muted-foreground pt-2">
-                Page {currentPage} of {totalPages}
+              <div className="pt-2">
+                <Pagination>
+                  <PaginationContent>
+                    <PaginationItem>
+                      <PaginationPrevious 
+                        onClick={() => goToPage(currentPage - 1)}
+                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
+                      <PaginationItem key={pageNum}>
+                        <PaginationLink
+                          onClick={() => goToPage(pageNum)}
+                          isActive={pageNum === currentPage}
+                          className="cursor-pointer"
+                        >
+                          {pageNum}
+                        </PaginationLink>
+                      </PaginationItem>
+                    ))}
+                    <PaginationItem>
+                      <PaginationNext 
+                        onClick={() => goToPage(currentPage + 1)}
+                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                      />
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
               </div>
             </Carousel>
           )}
@@ -728,6 +797,42 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                       </div>
                     )}
                   </div>
+                  
+                  {/* Price and Discount Display under image */}
+                  {detailViewItem.price && (
+                    <div className="mt-4">
+                      <div className="flex items-center justify-center gap-2 flex-wrap">
+                        {/* Price Circle */}
+                        <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg border border-red-600 flex-shrink-0">
+                          <div className="text-center leading-tight text-[16px] sm:text-[18px]">
+                            {detailViewItem.price.split(' ').map((part, index) => (
+                              <div key={index}>
+                                {part}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        {/* Savings Box */}
+                        {detailViewItem.discount_percentage && (
+                          <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
+                            <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
+                              {detailViewItem.discount_percentage}% OFF
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Discount Description */}
+                      {detailViewItem.discount && (
+                        <div className="mt-2 text-center">
+                          <p className="text-sm text-gray-700 font-medium">
+                            {detailViewItem.discount}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
                 {/* Right Column - Notes (50%) */}
@@ -784,44 +889,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                     />
                   </div>
                 </div>
-              </div>
-              
-              {/* Price and Savings Section */}
-              <div className="w-full px-4 min-w-0">
-                {detailViewItem.price && (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-center gap-2 flex-wrap">
-                      {/* Price Circle */}
-                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg border border-red-600 flex-shrink-0">
-                        <div className="text-center leading-tight text-[16px] sm:text-[18px]">
-                          {detailViewItem.price.split(' ').map((part, index) => (
-                            <div key={index}>
-                              {part}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                      
-                      {/* Savings Box */}
-                      {detailViewItem.discount_percentage && (
-                        <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
-                          <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
-                            {detailViewItem.discount_percentage} OFF
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Discount Description */}
-                {detailViewItem.discount && (
-                  <div className="mt-4 text-center">
-                    <p className="text-sm text-gray-700 font-medium">
-                      {detailViewItem.discount}
-                    </p>
-                  </div>
-                )}
               </div>
             </div>
             

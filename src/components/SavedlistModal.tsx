@@ -10,7 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconSvgForItem } from "@/lib/utils";
 
 interface SavedlistItem {
   id: number;
@@ -275,7 +275,7 @@ function TouchSortableSavedlistItem({
   return (
     <Card 
       ref={itemRef}
-      className={`py-4 px-4 shadow-card hover:shadow-elegant relative ${
+      className={`py-2 px-2 shadow-card hover:shadow-elegant relative ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
@@ -445,7 +445,23 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
   useEffect(() => {
     if (isOpen) {
       fetchSavedlistItems();
+      // Push state to history to handle back button
+      window.history.pushState({ modal: 'savedlist' }, '');
     }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal !== 'savedlist') {
+        // Back button pressed, close modal
+        handleClose();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
   }, [isOpen]);
 
   const fetchSavedlistItems = async () => {
@@ -647,6 +663,8 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
 
       // If no items exist, start with order 1, otherwise subtract 1 from minimum
       const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+      // Auto-assign icon if no image is set
+      const autoIcon = getIconSvgForItem(itemName);
 
       const { data, error } = await supabase
         .from('SavedlistItems')
@@ -656,7 +674,8 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
             Quantity: quantity,
             notes: notes,
             user_id: user.data.user.id,
-            order: newOrder
+            order: newOrder,
+            img: autoIcon
           }
         ])
         .select()
@@ -734,7 +753,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
       if (!user.data.user) return;
 
       // Helper function for case-insensitive comparison
-      const normalizeItemName = (name: string) => name.toLowerCase().trim();
+      const normalizeItemName = (name: string) => normalizePlural(name);
 
       // Get all existing grocery list items
       const { data: existingItems, error: fetchError } = await supabase
@@ -990,7 +1009,7 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                 }`}
                 title="Toggle search and sort"
               >
-                <Search className="h-4 w-4" />
+                <Search className={`h-4 w-4 ${searchVisible ? 'text-white' : 'text-muted-foreground'}`} />
               </Button>
               <Input
                 placeholder="Add a new item..."
@@ -999,7 +1018,12 @@ export function SavedlistModal({ isOpen, onClose, onItemsAdded }: SavedlistModal
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
                 className="flex-1"
               />
-              <Button onClick={addItem} size="sm">
+              <Button 
+                onClick={addItem} 
+                size="sm"
+                variant={newItem.trim() ? "default" : "outline"}
+                className={newItem.trim() ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>

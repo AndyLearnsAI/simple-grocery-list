@@ -13,7 +13,7 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconSvgForItem } from "@/lib/utils";
 
 interface GroceryItem {
   id: number;
@@ -336,7 +336,7 @@ function TouchSortableGroceryItem({
                     if (!trimmed || trimmed.toLowerCase() === (item.Item || '').toLowerCase()) { setIsEditingName(false); setNameValue(item.Item); return; }
                     // Prevent duplicates in current list
                     // Note: a more robust server-side check can be added if needed
-                    // @ts-ignore parent scope has items
+                    // @ts-expect-error parent scope has items
                     // Update directly
                     try {
                       const { error } = await supabase
@@ -626,7 +626,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     }
   };
 
-  const normalizeItemName = (name: string) => name.toLowerCase().trim();
+  const normalizeItemName = (name: string) => normalizePlural(name);
 
   const addItem = async () => {
     if (!newItem.trim()) return;
@@ -665,6 +665,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         }
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+        // Auto-assign icon if no image is set
+        const autoIcon = getIconSvgForItem(itemName);
           const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
@@ -672,7 +674,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
             Quantity: quantity,
               notes: notes && notes.trim() ? notes.trim() : null,
             user_id: user.id,
-            order: newOrder
+            order: newOrder,
+            img: autoIcon
           }])
           .select()
           .single();
@@ -751,6 +754,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
             throw minOrderError;
           }
           const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+          // Auto-assign icon if no image is set
+          const autoIcon = getIconSvgForItem(itemName);
           const { data, error } = await supabase
             .from('Grocery list')
             .insert([
@@ -759,7 +764,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 Quantity: qty,
                 notes: note && note.trim() ? note.trim() : null,
                 user_id: user.id,
-                order: newOrder
+                order: newOrder,
+                img: autoIcon
               }
             ])
             .select()
@@ -1251,7 +1257,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
               onKeyPress={(e) => e.key === 'Enter' && addItem()}
               className="flex-1"
             />
-            <Button onClick={addItem} size="sm">
+            <Button 
+              onClick={addItem} 
+              size="sm"
+              variant={newItem.trim() ? "default" : "outline"}
+              className={newItem.trim() ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -1327,7 +1338,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
                 className="flex-1"
               />
-              <Button onClick={addItem} size="sm">
+              <Button 
+                onClick={addItem} 
+                size="sm"
+                variant={newItem.trim() ? "default" : "outline"}
+                className={newItem.trim() ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
