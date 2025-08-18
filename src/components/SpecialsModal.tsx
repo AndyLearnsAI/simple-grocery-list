@@ -710,34 +710,32 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
                 <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
               </div>
-              <div className="pt-2">
-                <Pagination>
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationPrevious 
-                        onClick={() => goToPage(currentPage - 1)}
-                        className={currentPage <= 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                      />
-                    </PaginationItem>
-                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => (
-                      <PaginationItem key={pageNum}>
-                        <PaginationLink
-                          onClick={() => goToPage(pageNum)}
-                          isActive={pageNum === currentPage}
-                          className="cursor-pointer"
-                        >
-                          {pageNum}
-                        </PaginationLink>
-                      </PaginationItem>
-                    ))}
-                    <PaginationItem>
-                      <PaginationNext 
-                        onClick={() => goToPage(currentPage + 1)}
-                        className={currentPage >= totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
-                      />
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
+              <div className="pt-2 text-center">
+                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <span>Page</span>
+                  <input
+                    type="number"
+                    value={currentPage}
+                    onChange={(e) => {
+                      const page = parseInt(e.target.value);
+                      if (page >= 1 && page <= totalPages) {
+                        goToPage(page);
+                      }
+                    }}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        const page = parseInt((e.target as HTMLInputElement).value);
+                        if (page >= 1 && page <= totalPages) {
+                          goToPage(page);
+                        }
+                      }
+                    }}
+                    className="w-12 text-center border border-input rounded px-1 py-0.5 text-sm bg-background"
+                    min="1"
+                    max={totalPages}
+                  />
+                  <span>of {totalPages}</span>
+                </div>
               </div>
             </Carousel>
           )}

@@ -13,7 +13,8 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax, normalizePlural, getIconSvgForItem } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconForItem } from "@/lib/utils";
+import { ItemIcon } from "./ItemIcon";
 
 interface GroceryItem {
   id: number;
@@ -247,6 +248,10 @@ function TouchSortableGroceryItem({
                 className="w-full h-full object-contain"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder.svg'; }}
               />
+            ) : (item as any).auto_icon ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <ItemIcon itemName={item.Item} iconName={(item as any).auto_icon} size={16} className="text-gray-600" />
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
@@ -666,7 +671,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
         // Auto-assign icon if no image is set
-        const autoIcon = getIconSvgForItem(itemName);
+        const autoIcon = getIconForItem(itemName);
           const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
@@ -675,7 +680,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
               notes: notes && notes.trim() ? notes.trim() : null,
             user_id: user.id,
             order: newOrder,
-            img: autoIcon
+            auto_icon: autoIcon
           }])
           .select()
           .single();
@@ -755,7 +760,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
           }
           const newOrder = minOrderData ? minOrderData.order - 1 : 1;
           // Auto-assign icon if no image is set
-          const autoIcon = getIconSvgForItem(itemName);
+          const autoIcon = getIconForItem(itemName);
           const { data, error } = await supabase
             .from('Grocery list')
             .insert([
@@ -765,7 +770,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 notes: note && note.trim() ? note.trim() : null,
                 user_id: user.id,
                 order: newOrder,
-                img: autoIcon
+                auto_icon: autoIcon
               }
             ])
             .select()

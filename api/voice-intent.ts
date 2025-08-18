@@ -5,7 +5,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
 {
-  "summary": string, // plain-text bullets grouped by Add/Remove/Adjust. Example:\nAdd:\n- 2 × chickens\n- 3 × steaks\nRemove:\n- milk\nAdjust:\n- +2 apples
+  "summary": string, // ALWAYS format as HTML list items: <br>- bananas x2<br>- apples x4<br>- milk (remove)<br>- carrots (+3)
   "plan": {
     "add": Array<{"name": string, "quantity"?: number, "note"?: string}>,
     "remove": Array<{"name": string}>,
@@ -13,12 +13,13 @@ Return strict JSON with this shape:
   }
 }
 Rules:
+- CRITICAL: The summary MUST ALWAYS be formatted as HTML with <br> line breaks and list items in this exact format: <br>- itemname x# or <br>- itemname (remove) or <br>- itemname (+#) or <br>- itemname (-#)
 - Split enumerations like "add two chickens three steaks and four pork chops" into separate items with correct quantities.
 - Numbers may be words (two, three, four) or digits (2, 3, 4).
 - Merge duplicates by case-insensitive name.
 - quantity defaults to 1 if omitted.
 - For adjustments, positive delta means increase, negative means decrease.
-- If nothing actionable, return an empty plan and a helpful summary.
+- If nothing actionable, return an empty plan and a helpful summary saying "No grocery list changes requested."
 Return ONLY the JSON.`;
 
 export default async function handler(req: Request): Promise<Response> {
