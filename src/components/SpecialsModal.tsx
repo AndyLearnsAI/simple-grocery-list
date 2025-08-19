@@ -62,6 +62,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
   const [carouselApi, setCarouselApi] = useState<CarouselApi>();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
+  const [pageInputValue, setPageInputValue] = useState("1");
 
   const [detailViewItem, setDetailViewItem] = useState<SpecialsItem | null>(null);
   const [isDetailViewOpen, setIsDetailViewOpen] = useState(false);
@@ -117,13 +118,17 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
       const pageIndex = parseInt(savedPage) - 1;
       carouselApi.scrollTo(pageIndex);
       setCurrentPage(parseInt(savedPage));
+      setPageInputValue(savedPage);
     } else {
-      setCurrentPage(carouselApi.selectedScrollSnap() + 1);
+      const initialPage = carouselApi.selectedScrollSnap() + 1;
+      setCurrentPage(initialPage);
+      setPageInputValue(initialPage.toString());
     }
 
     const onSelect = () => {
       const newPage = carouselApi.selectedScrollSnap() + 1;
       setCurrentPage(newPage);
+      setPageInputValue(newPage.toString());
       // Save current page to localStorage
       localStorage.setItem('specials-last-page', newPage.toString());
     };
@@ -715,19 +720,35 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                   <span>Page</span>
                   <input
                     type="number"
-                    value={currentPage}
+                    value={pageInputValue}
                     onChange={(e) => {
-                      const page = parseInt(e.target.value);
-                      if (page >= 1 && page <= totalPages) {
-                        goToPage(page);
-                      }
+                      setPageInputValue(e.target.value);
                     }}
                     onKeyPress={(e) => {
                       if (e.key === 'Enter') {
-                        const page = parseInt((e.target as HTMLInputElement).value);
+                        const value = (e.target as HTMLInputElement).value;
+                        if (value === '' || value === '0') {
+                          setPageInputValue(currentPage.toString());
+                          return;
+                        }
+                        const page = parseInt(value);
                         if (page >= 1 && page <= totalPages) {
                           goToPage(page);
+                        } else {
+                          setPageInputValue(currentPage.toString());
                         }
+                      }
+                    }}
+                    onBlur={() => {
+                      if (pageInputValue === '' || pageInputValue === '0') {
+                        setPageInputValue(currentPage.toString());
+                        return;
+                      }
+                      const page = parseInt(pageInputValue);
+                      if (page >= 1 && page <= totalPages) {
+                        goToPage(page);
+                      } else {
+                        setPageInputValue(currentPage.toString());
                       }
                     }}
                     className="w-12 text-center border border-input rounded px-1 py-0.5 text-sm bg-background"

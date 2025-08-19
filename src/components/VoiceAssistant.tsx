@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Mic, Square, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -44,6 +44,29 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
       kind: "text" 
     }]));
   };
+
+  // Handle browser history when voice assistant opens
+  useEffect(() => {
+    if (chatOpen) {
+      // Push state to history to handle back button
+      window.history.pushState({ modal: 'voice-assistant' }, '');
+    }
+  }, [chatOpen]);
+
+  // Handle back button
+  useEffect(() => {
+    if (!chatOpen) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal !== 'voice-assistant') {
+        // Back button pressed, close modal
+        setChatOpen(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [chatOpen]);
 
   const stopAndSummarize = async () => {
     const blob = await recorder.stop();

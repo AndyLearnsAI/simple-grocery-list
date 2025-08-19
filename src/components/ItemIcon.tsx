@@ -46,7 +46,17 @@ export function ItemIcon({ itemName, iconName, size = 24, className = "text-gray
     'shirt': Icons.Shirt,
     'spray-can': Icons.SprayCan,
     'pill': Icons.Pill,
-    'salt': Icons.CircleDot // Salt icon doesn't exist, use CircleDot
+    'salt': Icons.CircleDot, // Salt icon doesn't exist, use CircleDot
+    'shopping-basket': Icons.ShoppingBasket,
+    'croissant': Icons.Croissant,
+    'donut': Icons.Donut,
+    'ice-cream-cone': Icons.IceCreamCone,
+    'cake': Icons.Cake,
+    'pizza': Icons.Pizza,
+    'sandwich': Icons.Sandwich,
+    'soup': Icons.Soup,
+    'salad': Icons.Salad,
+    'ham': Icons.Ham
   };
   
   const IconComponent = iconMap[iconName];
