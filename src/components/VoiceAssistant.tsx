@@ -40,9 +40,13 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
     // Show an initial assistant hint only if chat is empty
     setMessages((prev) => (prev.length ? prev : [{ 
       role: "assistant", 
-      content: "Tap 'Start' and say what you'd like to do with the grocery list. Tap 'Done' when you're finished talking.", 
+      content: "Recording started! Say what you'd like to do with the grocery list, then tap 'Done' when finished.", 
       kind: "text" 
     }]));
+    // Auto-start recording when modal opens
+    setTimeout(() => {
+      recorder.start();
+    }, 500); // Small delay to ensure modal is fully opened
   };
 
   // Handle browser history when voice assistant opens
