@@ -185,8 +185,11 @@ export function getIconForItem(itemName: string): string | null {
  * Parses smart syntax from user input to extract item name, quantity, and notes
  * Examples:
  * - "Chicken x3" → { itemName: "Chicken", quantity: 3 }
+ * - "3x Chicken" → { itemName: "Chicken", quantity: 3 }
+ * - "2x oranges" → { itemName: "oranges", quantity: 2 }
  * - "Chicken (when cheap)" → { itemName: "Chicken", quantity: 1, notes: "when cheap" }
  * - "Chicken x3 (when cheap)" → { itemName: "Chicken", quantity: 3, notes: "when cheap" }
+ * - "2x apples (if fresh)" → { itemName: "apples", quantity: 2, notes: "if fresh" }
  */
 export function parseSmartSyntax(input: string): {
   itemName: string;
@@ -197,15 +200,27 @@ export function parseSmartSyntax(input: string): {
   let quantity = 1;
   let notes: string | undefined;
 
-  // Parse quantity (look for "x" followed by numbers)
-  const quantityMatch = itemName.match(/\bx(\d+)\b/i);
-  if (quantityMatch) {
-    const parsedQuantity = parseInt(quantityMatch[1], 10);
+  // Parse quantity patterns:
+  // 1. "item x3" - quantity after item name
+  const quantityAfterMatch = itemName.match(/\bx(\d+)\b/i);
+  if (quantityAfterMatch) {
+    const parsedQuantity = parseInt(quantityAfterMatch[1], 10);
     if (parsedQuantity > 0) {
       quantity = Math.min(99, parsedQuantity); // Cap at 99
     }
     // Remove quantity part from item name
     itemName = itemName.replace(/\bx\d+\b/i, '').trim();
+  } else {
+    // 2. "3x item" - quantity before item name
+    const quantityBeforeMatch = itemName.match(/^(\d+)x\s*(.+)/i);
+    if (quantityBeforeMatch) {
+      const parsedQuantity = parseInt(quantityBeforeMatch[1], 10);
+      if (parsedQuantity > 0) {
+        quantity = Math.min(99, parsedQuantity); // Cap at 99
+      }
+      // Extract item name after quantity
+      itemName = quantityBeforeMatch[2].trim();
+    }
   }
 
   // Parse notes (look for parentheses with content)
