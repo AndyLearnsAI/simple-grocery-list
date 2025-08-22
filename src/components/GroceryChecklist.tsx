@@ -7,13 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconForItem } from "@/lib/utils";
+import { ItemIcon } from "./ItemIcon";
 
 interface GroceryItem {
   id: number;
@@ -32,11 +34,12 @@ interface GroceryItem {
 
 interface DeletedItem extends GroceryItem {
   deletedAt: number;
-  action: 'deleted' | 'purchased' | 'added-saved' | 'added-specials';
+  action: 'deleted' | 'purchased' | 'added-saved' | 'added-specials' | 'deleted-all';
   purchaseHistoryId?: number;
   originalQuantity?: number;
   addedItemIds?: number[];
   addedItems?: { item: string; quantity: number; originalQuantity?: number; wasNew: boolean }[];
+  bulkDeletedItems?: GroceryItem[];
 }
 
 function TouchSortableGroceryItem({ 
@@ -247,6 +250,10 @@ function TouchSortableGroceryItem({
                 className="w-full h-full object-contain"
                 onError={(e) => { (e.currentTarget as HTMLImageElement).src = '/placeholder.svg'; }}
               />
+            ) : (item as any).auto_icon ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <ItemIcon itemName={item.Item} iconName={(item as any).auto_icon} size={16} className="text-gray-600" />
+              </div>
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <ShoppingCart className="h-4 w-4 text-gray-400" />
@@ -336,7 +343,7 @@ function TouchSortableGroceryItem({
                     if (!trimmed || trimmed.toLowerCase() === (item.Item || '').toLowerCase()) { setIsEditingName(false); setNameValue(item.Item); return; }
                     // Prevent duplicates in current list
                     // Note: a more robust server-side check can be added if needed
-                    // @ts-ignore parent scope has items
+                    // @ts-expect-error parent scope has items
                     // Update directly
                     try {
                       const { error } = await supabase
@@ -448,6 +455,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
   const [dragDestination, setDragDestination] = useState<number | null>(null);
   const [isSorting, setIsSorting] = useState(false);
   const [detailModalItem, setDetailModalItem] = useState<GroceryItem | null>(null);
+  const [deleteAllModalOpen, setDeleteAllModalOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -626,7 +634,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     }
   };
 
-  const normalizeItemName = (name: string) => name.toLowerCase().trim();
+  const normalizeItemName = (name: string) => normalizePlural(name);
 
   const addItem = async () => {
     if (!newItem.trim()) return;
@@ -665,6 +673,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         }
         // If no items exist, start with order 1, otherwise subtract 1 from minimum
         const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+        // Auto-assign icon if no image is set
+        const autoIcon = getIconForItem(itemName);
           const { data, error } = await supabase
           .from('Grocery list')
           .insert([{
@@ -672,7 +682,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
             Quantity: quantity,
               notes: notes && notes.trim() ? notes.trim() : null,
             user_id: user.id,
-            order: newOrder
+            order: newOrder,
+            auto_icon: autoIcon
           }])
           .select()
           .single();
@@ -751,6 +762,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
             throw minOrderError;
           }
           const newOrder = minOrderData ? minOrderData.order - 1 : 1;
+          // Auto-assign icon if no image is set
+          const autoIcon = getIconForItem(itemName);
           const { data, error } = await supabase
             .from('Grocery list')
             .insert([
@@ -759,7 +772,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 Quantity: qty,
                 notes: note && note.trim() ? note.trim() : null,
                 user_id: user.id,
-                order: newOrder
+                order: newOrder,
+                auto_icon: autoIcon
               }
             ])
             .select()
@@ -1058,6 +1072,40 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
           title: "Addition undone!",
           description: `${itemToUndo.action === 'added-saved' ? 'Saved items' : 'Specials'} addition undone`,
         });
+      } else if (itemToUndo.action === 'deleted-all') {
+        if (itemToUndo.bulkDeletedItems && itemToUndo.bulkDeletedItems.length > 0) {
+          // Restore all deleted items to the database
+          const itemsToRestore = itemToUndo.bulkDeletedItems.map(item => ({
+            Item: item.Item,
+            Quantity: item.Quantity,
+            user_id: user.data.user.id,
+            img: item.img,
+            order: item.order,
+            notes: item.notes,
+            price: item.price,
+            discount: item.discount,
+            discount_percentage: item.discount_percentage,
+            link: item.link
+          }));
+
+          const { data: restoredItems, error: restoreError } = await supabase
+            .from('Grocery list')
+            .insert(itemsToRestore)
+            .select();
+
+          if (restoreError) throw restoreError;
+
+          if (restoredItems) {
+            const newItems = restoredItems.map(item => ({ ...item, checked: false }));
+            setItems(newItems);
+          }
+
+          setRecentlyDeleted(null);
+          toast({
+            title: "Deletion undone!",
+            description: `${itemToUndo.bulkDeletedItems.length} items have been restored to your grocery list`,
+          });
+        }
       }
     } catch (error) {
       let errorMessage = "Failed to undo the last action";
@@ -1133,7 +1181,76 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     fetchItems();
   };
 
+  const deleteAllItems = async () => {
+    try {
+      const user = await supabase.auth.getUser();
+      if (!user.data.user) {
+        toast({
+          title: "Authentication Error",
+          description: "Please sign in to delete items",
+          variant: "destructive",
+        });
+        return;
+      }
 
+      if (items.length === 0) {
+        toast({
+          title: "No items to delete",
+          description: "Your grocery list is already empty",
+        });
+        setDeleteAllModalOpen(false);
+        return;
+      }
+
+      // Store items for undo functionality
+      const itemsToDelete = [...items];
+      const deletedCount = itemsToDelete.length;
+
+      // Delete all items from the database
+      const { error: deleteError } = await supabase
+        .from('Grocery list')
+        .delete()
+        .eq('user_id', user.data.user.id);
+
+      if (deleteError) throw deleteError;
+
+      // Clear the local state
+      setItems([]);
+      setDeleteAllModalOpen(false);
+
+      // Create deleted item for undo functionality
+      const deletedItem = {
+        id: 0, // Placeholder ID for bulk deletion
+        Item: `${deletedCount} items`,
+        deletedAt: Date.now(),
+        action: 'deleted-all' as const,
+        order: 0,
+        bulkDeletedItems: itemsToDelete
+      };
+
+      setRecentlyDeleted(deletedItem);
+      
+      toast({
+        title: "All items deleted",
+        description: `${deletedCount} items have been removed from your grocery list`,
+        action: (
+          <ToastAction
+            altText="Undo deletion" 
+            onClick={() => undoDelete(deletedItem)}
+          >
+            Undo
+          </ToastAction>
+        ),
+      });
+
+    } catch (error) {
+      toast({
+        title: "Error deleting items",
+        description: "Failed to delete all items from grocery list",
+        variant: "destructive",
+      });
+    }
+  };
 
   const sortItems = async (sortType: 'newest' | 'oldest' | 'az' | 'za') => {
     setIsSorting(true);
@@ -1251,7 +1368,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
               onKeyPress={(e) => e.key === 'Enter' && addItem()}
               className="flex-1"
             />
-            <Button onClick={addItem} size="sm">
+            <Button 
+              onClick={addItem} 
+              size="sm"
+              variant={newItem.trim() ? "default" : "outline"}
+              className={newItem.trim() ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+            >
               <Plus className="h-4 w-4" />
             </Button>
           </div>
@@ -1276,6 +1398,17 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 </Button>
               )}
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteAllModalOpen(true)}
+              className="gap-2 text-pink-600 border-pink-300 hover:bg-pink-50 hover:text-pink-700 hover:border-pink-400"
+              disabled={items.length === 0}
+              title="Delete all items"
+            >
+              <Trash2 className="h-4 w-4" />
+              All
+            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
@@ -1327,7 +1460,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 onKeyPress={(e) => e.key === 'Enter' && addItem()}
                 className="flex-1"
               />
-              <Button onClick={addItem} size="sm">
+              <Button 
+                onClick={addItem} 
+                size="sm"
+                variant={newItem.trim() ? "default" : "outline"}
+                className={newItem.trim() ? "bg-green-500 hover:bg-green-600 text-white" : ""}
+              >
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1366,6 +1504,36 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
         onClose={() => setSpecialsModalOpen(false)}
         onItemsAdded={handleSpecialsItemsAdded}
       />
+      
+      {/* Delete All Confirmation Modal */}
+      <Dialog open={deleteAllModalOpen} onOpenChange={setDeleteAllModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete All Items</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground">
+              Are you sure you want to delete all {items.length} items from your grocery list? You can undo this action immediately after deletion.
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDeleteAllModalOpen(false)}
+              className="bg-green-50 text-green-700 border-green-300 hover:bg-green-100 hover:text-green-800 hover:border-green-400"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={deleteAllItems}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              Yes, delete all
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {detailModalItem && (
         <ItemDetailModal
           isOpen={!!detailModalItem}

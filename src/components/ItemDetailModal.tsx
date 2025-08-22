@@ -47,6 +47,27 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
     setIsEditingName(false);
   }, [item]);
 
+  useEffect(() => {
+    if (isOpen) {
+      // Push state to history to handle back button
+      window.history.pushState({ modal: 'item-detail' }, '');
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal !== 'item-detail') {
+        // Back button pressed, close modal
+        onClose();
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [isOpen, onClose]);
+
   const validateName = (name: string): string | null => {
     if (!name.trim()) return "Item name cannot be empty";
     if (name.trim().length > 99) return "Item name cannot exceed 99 characters";
@@ -220,7 +241,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-md">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle asChild>
             <div className="flex items-center justify-between gap-2">
@@ -265,81 +286,144 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
             </div>
           </DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col items-center gap-4 pt-4">
-          {item.img ? (
-            <div className="relative group">
-              <img
-                src={item.img}
-                alt={item.Item}
-                className={`w-32 h-32 object-contain rounded-lg ${item.link ? 'cursor-pointer hover:opacity-80' : ''}`}
-                onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
-                onClick={() => {
-                  if (item.link) {
-                    window.open(item.link, '_blank');
-                  }
-                }}
-              />
-              {item.link && (
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
-                  <div 
-                    className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      window.open(item.link, '_blank');
+        {/* Main Content - Split Layout matching SpecialsModal */}
+        <div className="flex flex-col gap-4 pt-4">
+          {/* Image and Form Row */}
+          <div className="flex gap-4 px-4">
+            {/* Left Column - Image (50%) */}
+            <div className="flex-1 flex flex-col items-center">
+              <div className="relative group">
+                {item.img ? (
+                  <img
+                    src={item.img}
+                    alt={item.Item}
+                    className={`w-40 h-40 object-contain rounded-lg ${item.link ? 'cursor-pointer hover:opacity-80' : ''}`}
+                    onError={(e) => { e.currentTarget.src = '/placeholder.svg'; }}
+                    onClick={() => {
+                      if (item.link) {
+                        window.open(item.link, '_blank');
+                      }
                     }}
-                  >
-                    <Link className="h-4 w-4 text-green-700" />
+                  />
+                ) : (
+                  <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart text-gray-400"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.16"/></svg>
                   </div>
+                )}
+                {item.link && (
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-200 pointer-events-none">
+                    <div 
+                      className="bg-green-100 rounded-full p-2 shadow-lg cursor-pointer pointer-events-auto"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        window.open(item.link, '_blank');
+                      }}
+                    >
+                      <Link className="h-4 w-4 text-green-700" />
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Price and Discount Display under image */}
+              {(price || discountPercentage) && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {/* Price Circle */}
+                    {price && (
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 bg-red-500 text-white rounded-full flex items-center justify-center font-bold text-xs sm:text-sm shadow-lg border border-red-600 flex-shrink-0">
+                        <div className="text-center leading-tight text-[16px] sm:text-[18px]">
+                          {price.split(' ').map((part, index) => (
+                            <div key={index}>
+                              {part}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Savings Box */}
+                    {discountPercentage && (
+                      <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
+                        <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
+                          {discountPercentage}% OFF
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Discount Description */}
+                  {discount && (
+                    <div className="mt-2 text-center">
+                      <p className="text-sm text-gray-700 font-medium">
+                        {discount}
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-          ) : (
-            <div className="w-32 h-32 bg-gray-100 rounded-lg flex items-center justify-center">
-              <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart text-gray-400"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.16"/></svg>
-            </div>
-          )}
-          <div className="w-full space-y-2">
-            <div className="flex items-center">
-              <label className="w-1/4 text-sm font-medium pr-2">Quantity</label>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.max(1, q - 1))} className="w-8 h-8 p-0">-</Button>
-                <Input 
-                  type="number" 
-                  value={quantity} 
-                  onChange={(e) => {
-                    const value = parseInt(e.target.value) || 1;
-                    setQuantity(Math.max(1, Math.min(99, value)));
-                  }} 
-                  className="w-12 text-center" 
-                  min="1"
-                  max="99"
-                />
-                <Button variant="outline" size="sm" onClick={() => setQuantity(q => Math.min(99, q + 1))} className="w-8 h-8 p-0">+</Button>
+            
+            {/* Right Column - Form (50%) */}
+            <div className="flex-1 flex flex-col gap-4">
+              {/* Quantity Counter */}
+              <div className="flex items-center justify-center gap-4">
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="w-8 h-8 p-0"
+                  disabled={quantity <= 1}
+                >
+                  -
+                </Button>
+                <span className="text-lg font-semibold min-w-[2rem] text-center">{quantity}</span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => setQuantity(q => Math.min(99, q + 1))}
+                  className="w-8 h-8 p-0"
+                  disabled={quantity >= 99}
+                >
+                  +
+                </Button>
               </div>
-            </div>
-            <div className="flex items-center">
-              <label htmlFor="price" className="w-1/4 text-sm font-medium pr-2">Price</label>
-              <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} />
-            </div>
-            <div className="flex items-center">
-              <label htmlFor="discount_percentage" className="w-1/4 text-sm font-medium pr-2">Discount %</label>
-              <Input 
-                id="discount_percentage" 
-                type="text" 
-                value={discountPercentage} 
-                onChange={(e) => setDiscountPercentage(e.target.value)}
-              />
-            </div>
-            <div className="flex items-center">
-              <label htmlFor="discount" className="w-1/4 text-sm font-medium pr-2">Discount</label>
-              <Input id="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} />
-            </div>
-            <div className="flex items-center">
-              <label htmlFor="notes" className="w-1/4 text-sm font-medium pr-2">Notes</label>
-              <Input id="notes" value={notes} onChange={(e) => setNotes(e.target.value)} />
+              
+              {/* Form Fields */}
+              <div className="w-full space-y-3">
+                <div>
+                  <label htmlFor="price" className="block text-sm font-medium mb-1">Price</label>
+                  <Input id="price" value={price} onChange={(e) => setPrice(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="discount_percentage" className="block text-sm font-medium mb-1">Discount %</label>
+                  <Input 
+                    id="discount_percentage" 
+                    type="text" 
+                    value={discountPercentage} 
+                    onChange={(e) => setDiscountPercentage(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label htmlFor="discount" className="block text-sm font-medium mb-1">Discount</label>
+                  <Input id="discount" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+                </div>
+                <div>
+                  <label htmlFor="notes" className="block text-sm font-medium mb-1">Notes</label>
+                  <Textarea 
+                    id="notes" 
+                    value={notes} 
+                    onChange={(e) => setNotes(e.target.value)}
+                    className="min-h-[80px]"
+                    placeholder="Add notes about this item..."
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>
+        
+        {/* Action Buttons */}
         <div className="flex gap-2 justify-end mt-4">
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="destructive" onClick={handleDelete} className="gap-2"><Trash2 className="h-4 w-4" /> Delete</Button>

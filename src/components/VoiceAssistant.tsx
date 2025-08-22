@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Mic, Square, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -14,69 +14,134 @@ type VoiceAssistantProps = {
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const recorder = useAudioRecorder();
   const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  
   const [chatOpen, setChatOpen] = useState(false);
   const [plan, setPlan] = useState<ParsedPlan | null>(null);
   const [executing, setExecuting] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [streamingResponse, setStreamingResponse] = useState("");
+  const [isStreaming, setIsStreaming] = useState(false);
 
-  // We no longer live-transcribe; backend handles transcription from recorded audio
-  const displayTranscript = "";
-
-  type ChatMessage = { role: "user" | "assistant"; content: string; kind?: "plan" | "text" | "spinner" };
+  type ChatMessage = { 
+    role: "user" | "assistant"; 
+    content: string; 
+    kind?: "plan" | "text" | "streaming";
+  };
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   const openChat = () => {
     if (!recorder.isSupported) return;
     setChatOpen(true);
     setPlan(null);
+    setTranscript("");
+    setStreamingResponse("");
+    setIsStreaming(false);
     // Show an initial assistant hint only if chat is empty
-    setMessages((prev) => (prev.length ? prev : [{ role: "assistant", content: "Tap 'Start' and say what you'd like to do with the grocery list. Tap 'Done' when you're finished talking.", kind: "text" }]));
+    setMessages((prev) => (prev.length ? prev : [{ 
+      role: "assistant", 
+      content: "Recording started! Say what you'd like to do with the grocery list, then tap 'Done' when finished.", 
+      kind: "text" 
+    }]));
+    // Auto-start recording when modal opens
+    setTimeout(() => {
+      recorder.start();
+    }, 500); // Small delay to ensure modal is fully opened
   };
+
+  // Handle browser history when voice assistant opens
+  useEffect(() => {
+    if (chatOpen) {
+      // Push state to history to handle back button
+      window.history.pushState({ modal: 'voice-assistant' }, '');
+    }
+  }, [chatOpen]);
+
+  // Handle back button
+  useEffect(() => {
+    if (!chatOpen) return;
+
+    const handlePopState = (event: PopStateEvent) => {
+      if (event.state?.modal !== 'voice-assistant') {
+        // Back button pressed, close modal
+        setChatOpen(false);
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [chatOpen]);
 
   const stopAndSummarize = async () => {
     const blob = await recorder.stop();
     if (!blob) {
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
+      setMessages((prev) => [...prev, { role: 'assistant', content: 'Recording failed. Please try again.' }]);
       return;
     }
     setProcessing(true);
+    
     try {
       const base = import.meta.env.VITE_API_BASE_URL || '';
       const fd = new FormData();
       fd.append('audio', blob, 'voice.webm');
       const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
       setProcessing(false);
+      
       if (res.ok) {
         const data = await res.json();
         const raw = data?.transcript || '';
-        const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
-        const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
-        if (isClear) {
-          setPlan(llmPlan);
-          const summary = (typeof data?.summary === 'string' && data.summary.trim()) ? data.summary : buildPlanSummary(llmPlan);
-          setMessages((prev) => {
-            const copy = [...prev];
-            if (raw) copy.push({ role: 'user', content: raw });
-            copy.push({ role: 'assistant', content: summary, kind: 'plan' });
-            return copy;
-          });
-        } else {
-          setPlan(null);
-          setMessages((prev) => {
-            const copy = [...prev];
-            if (raw) copy.push({ role: 'user', content: raw });
-            copy.push({ role: 'assistant', content: "Sorry, couldn't get what you're after. Please try again by tapping the record button" });
-            return copy;
-          });
+        
+        // Immediately show transcript
+        if (raw) {
+          setTranscript(raw);
+          setMessages((prev) => [...prev, { role: 'user', content: raw }]);
+        }
+        
+        // Start streaming response
+        if (data?.summary) {
+          setIsStreaming(true);
+          setStreamingResponse("");
+          await streamText(data.summary);
+          
+          // After streaming, process the plan
+          const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
+          const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
+          
+          if (isClear) {
+            setPlan(llmPlan);
+            setMessages((prev) => [...prev, { 
+              role: 'assistant', 
+              content: data.summary, 
+              kind: 'plan' 
+            }]);
+          } else {
+            setMessages((prev) => [...prev, { 
+              role: 'assistant', 
+              content: data.summary || "I heard you, but I'm not sure what changes you'd like to make to your grocery list."
+            }]);
+          }
         }
         return;
       }
-      await res.text();
+      
       setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
     } catch (e) {
       setProcessing(false);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
     }
+  };
+
+  // Stream text word by word
+  const streamText = async (text: string) => {
+    const words = text.split(' ');
+    setStreamingResponse("");
+    
+    for (let i = 0; i < words.length; i++) {
+      setStreamingResponse(prev => prev + (i > 0 ? ' ' : '') + words[i]);
+      await new Promise(resolve => setTimeout(resolve, 100)); // Adjust speed here
+    }
+    
+    setIsStreaming(false);
   };
 
   const buildPlanSummary = (p: ParsedPlan) => {
@@ -149,7 +214,7 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                   }`}
                 >
                   <span dangerouslySetInnerHTML={{ __html: m.content }} />
-                  {m.kind === 'plan' && (
+                  {m.kind === 'plan' && !isStreaming && (
                     <div className="mt-3 flex gap-2">
                       <Button onClick={executePlan} disabled={executing}>
                         <Check className="w-4 h-4 mr-1" /> Accept
@@ -169,6 +234,16 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 </div>
               </div>
             ))}
+            
+            {/* Show streaming response */}
+            {isStreaming && streamingResponse && (
+              <div className="flex justify-start">
+                <div className="whitespace-pre-wrap max-w-[85%] rounded-2xl px-3 py-2 text-sm bg-white text-black border border-black">
+                  {streamingResponse}
+                  <span className="animate-pulse">|</span>
+                </div>
+              </div>
+            )}
           </div>
           <div className="border-t p-6 flex flex-col items-center justify-center gap-3">
             {processing && (
@@ -177,6 +252,13 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 <span>Processing…</span>
               </div>
             )}
+            
+            {transcript && (
+              <div className="text-sm text-muted-foreground italic">
+                "You said: {transcript}"
+              </div>
+            )}
+
             {recorder.state === 'recording' ? (
               <Button
                 onClick={stopAndSummarize}
@@ -191,10 +273,13 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
                 onClick={() => recorder.start()}
                 title="Start"
                 className="relative w-20 h-20 rounded-full bg-green-600 hover:bg-green-700 text-white flex items-center justify-center disabled:opacity-70"
-                disabled={processing}
+                disabled={processing || isStreaming}
               >
-                {processing ? <span className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Mic className="w-6 h-6" />}
-                {/** subtle pulse to invite action */}
+                {processing ? (
+                  <span className="h-6 w-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Mic className="w-6 h-6" />
+                )}
                 <span className="absolute inset-0 rounded-full animate-pulse bg-green-500/10" />
               </Button>
             )}
