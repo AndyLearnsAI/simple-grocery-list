@@ -202,7 +202,7 @@ function TouchSortableGroceryItem({
   return (
     <Card 
       ref={itemRef}
-      className={`py-4 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
+      className={`py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
         isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
       } ${
         dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''

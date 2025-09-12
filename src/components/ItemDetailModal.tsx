@@ -346,7 +346,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
                     {discountPercentage && (
                       <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
                         <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
-                          {discountPercentage}% OFF
+                          {discountPercentage} OFF
                         </p>
                       </div>
                     )}
