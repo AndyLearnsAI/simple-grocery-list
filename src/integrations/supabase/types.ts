@@ -28,6 +28,7 @@ export type Database = {
           notes: string | null
           img: string | null
           link: string | null
+          auto_icon: string | null
         }
         Insert: {
           created_at?: string
@@ -42,6 +43,7 @@ export type Database = {
           notes?: string | null
           img?: string | null
           link?: string | null
+          auto_icon?: string | null
         }
         Update: {
           created_at?: string
@@ -56,6 +58,7 @@ export type Database = {
           notes?: string | null
           img?: string | null
           link?: string | null
+          auto_icon?: string | null
         }
         Relationships: []
       }
@@ -100,6 +103,7 @@ export type Database = {
           discount_percentage: string | null
           notes: string | null
           link: string | null
+          auto_icon: string | null
         }
         Insert: {
           created_at?: string
@@ -113,6 +117,8 @@ export type Database = {
           discount?: string | null
           discount_percentage?: number | null
           notes?: string | null
+          link?: string | null
+          auto_icon?: string | null
         }
         Update: {
           created_at?: string
@@ -126,6 +132,8 @@ export type Database = {
           discount?: string | null
           discount_percentage?: number | null
           notes?: string | null
+          link?: string | null
+          auto_icon?: string | null
         }
         Relationships: []
       }

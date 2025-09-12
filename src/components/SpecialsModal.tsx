@@ -578,15 +578,60 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
           <DialogHeader className="sticky top-0 z-10 bg-background">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-2xl font-bold text-left">Weekly Specials</DialogTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => { onClose(); onModalClose?.(); }}
-                aria-label="Close specials"
-              >
-                <X className="h-5 w-5" />
-              </Button>
+              <div className="flex items-center gap-4">
+                {!loading && specials.length > 0 && totalPages > 1 && (
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>Page</span>
+                    <input
+                      type="number"
+                      value={pageInputValue}
+                      onChange={(e) => {
+                        setPageInputValue(e.target.value);
+                      }}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter') {
+                          const value = (e.target as HTMLInputElement).value;
+                          if (value === '' || value === '0') {
+                            setPageInputValue(currentPage.toString());
+                            return;
+                          }
+                          const page = parseInt(value);
+                          if (page >= 1 && page <= totalPages) {
+                            goToPage(page);
+                          } else {
+                            setPageInputValue(currentPage.toString());
+                          }
+                        }
+                      }}
+                      onBlur={() => {
+                        if (pageInputValue === '' || pageInputValue === '0') {
+                          setPageInputValue(currentPage.toString());
+                          return;
+                        }
+                        const page = parseInt(pageInputValue);
+                        if (page >= 1 && page <= totalPages) {
+                          goToPage(page);
+                        } else {
+                          setPageInputValue(currentPage.toString());
+                        }
+                      }}
+                      className="w-12 text-center border border-input rounded px-1 py-0.5 text-sm bg-background"
+                      min="1"
+                      max={totalPages}
+                    />
+                    <span>of {totalPages}</span>
+                  </div>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => { onClose(); onModalClose?.(); }}
+                  aria-label="Close specials"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
           </DialogHeader>
           {loading ? (
@@ -715,49 +760,6 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                 <CarouselPrevious className="absolute left-2 top-1/2 -translate-y-1/2 z-10" />
                 <CarouselNext className="absolute right-2 top-1/2 -translate-y-1/2 z-10" />
               </div>
-              <div className="pt-2 text-center">
-                <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
-                  <span>Page</span>
-                  <input
-                    type="number"
-                    value={pageInputValue}
-                    onChange={(e) => {
-                      setPageInputValue(e.target.value);
-                    }}
-                    onKeyPress={(e) => {
-                      if (e.key === 'Enter') {
-                        const value = (e.target as HTMLInputElement).value;
-                        if (value === '' || value === '0') {
-                          setPageInputValue(currentPage.toString());
-                          return;
-                        }
-                        const page = parseInt(value);
-                        if (page >= 1 && page <= totalPages) {
-                          goToPage(page);
-                        } else {
-                          setPageInputValue(currentPage.toString());
-                        }
-                      }
-                    }}
-                    onBlur={() => {
-                      if (pageInputValue === '' || pageInputValue === '0') {
-                        setPageInputValue(currentPage.toString());
-                        return;
-                      }
-                      const page = parseInt(pageInputValue);
-                      if (page >= 1 && page <= totalPages) {
-                        goToPage(page);
-                      } else {
-                        setPageInputValue(currentPage.toString());
-                      }
-                    }}
-                    className="w-12 text-center border border-input rounded px-1 py-0.5 text-sm bg-background"
-                    min="1"
-                    max={totalPages}
-                  />
-                  <span>of {totalPages}</span>
-                </div>
-              </div>
             </Carousel>
           )}
           <DialogFooter className="mt-4">
@@ -836,7 +838,7 @@ export function SpecialsModal({ isOpen, onClose, onItemsAdded, onModalClose }: S
                         {detailViewItem.discount_percentage && (
                           <div className="bg-yellow-400 border-2 border-yellow-500 rounded-lg p-2 shadow-sm max-w-[150px] sm:max-w-[200px] flex-shrink-0">
                             <p className="text-[14px] sm:text-[16px] font-bold text-gray-800 leading-tight text-center">
-                              {detailViewItem.discount_percentage}% OFF
+                              {detailViewItem.discount_percentage} OFF
                             </p>
                           </div>
                         )}
