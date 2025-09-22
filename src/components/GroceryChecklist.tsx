@@ -14,7 +14,7 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax, normalizePlural, getIconForItem } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconForItem, cn } from "@/lib/utils";
 import { ItemIcon } from "./ItemIcon";
 
 interface GroceryItem {
@@ -49,6 +49,7 @@ function TouchSortableGroceryItem({
   onRemove, 
   onReorder,
   onImageClick,
+  onNotesChange,
   index,
   totalItems,
   dragDestination,
@@ -60,6 +61,7 @@ function TouchSortableGroceryItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onImageClick: (item: GroceryItem) => void;
+  onNotesChange: (id: number, notes: string | null) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -80,6 +82,12 @@ function TouchSortableGroceryItem({
   const editQuantityRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const trimmedNote = item.notes?.trim() ?? "";
+  const hasNotes = trimmedNote.length > 0;
+
+  useEffect(() => {
+    setNotesValue(item.notes || "");
+  }, [item.notes]);
 
   const handleQuantityEditToggle = () => {
     setIsQuantityEditing(prev => !prev);
@@ -200,15 +208,18 @@ function TouchSortableGroceryItem({
   }, [isDragging, dragStartY]);
 
   return (
-    <Card 
+    <Card
       ref={itemRef}
-      className={`py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
-        isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
-      } ${
-        dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
-      } ${
-        isQuantityEditing ? 'bg-green-50 border-green-200' : ''
-      }`}
+      className={cn(
+        "py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden transition-colors",
+        hasNotes &&
+          !isDragging &&
+          !isQuantityEditing &&
+          "bg-[hsl(var(--accent)/0.18)] border-[hsl(var(--accent)/0.4)] dark:bg-[hsl(var(--accent)/0.25)] dark:border-[hsl(var(--accent)/0.35)]",
+        isDragging && "bg-green-50 border-green-200 shadow-lg",
+        dragDestination !== null && dragDestination === index && "ring-2 ring-blue-500 ring-opacity-50",
+        isQuantityEditing && "bg-green-50 border-green-200"
+      )}
       style={{
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
@@ -332,12 +343,13 @@ function TouchSortableGroceryItem({
           )}
           
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 group">
-              {isEditingName ? (
-                <Input
-                  ref={nameInputRef}
-                  value={nameValue}
-                  onChange={(e) => setNameValue(e.target.value)}
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2 group">
+                {isEditingName ? (
+                  <Input
+                    ref={nameInputRef}
+                    value={nameValue}
+                    onChange={(e) => setNameValue(e.target.value)}
                   onBlur={async () => {
                     const trimmed = nameValue.trim();
                     if (!trimmed || trimmed.toLowerCase() === (item.Item || '').toLowerCase()) { setIsEditingName(false); setNameValue(item.Item); return; }
@@ -372,15 +384,21 @@ function TouchSortableGroceryItem({
                   maxLength={99}
                   autoFocus
                 />
-              ) : (
-                <button
-                  type="button"
-                  className={`font-medium text-left text-sm break-words ${item.checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}
-                  onClick={() => setIsEditingName(true)}
-                  title="Edit name"
-                >
-                  {item.Item}
-                </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={`font-medium text-left text-sm break-words ${item.checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                    onClick={() => setIsEditingName(true)}
+                    title="Edit name"
+                  >
+                    {item.Item}
+                  </button>
+                )}
+              </div>
+              {hasNotes && (
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-tight break-words whitespace-pre-line">
+                  {trimmedNote}
+                </p>
               )}
               {/* moved note icon to far right */}
             </div>
@@ -396,7 +414,14 @@ function TouchSortableGroceryItem({
                 className="h-6 w-6 p-0 mr-2"
                 title={((notesValue || item.notes || "").trim()) ? 'Edit note' : 'Add note'}
               >
-                <FileText className={`h-3 w-3 ${((notesValue || item.notes || "").trim()) ? 'text-green-600' : 'text-muted-foreground/40'}`} />
+                <FileText
+                  className={cn(
+                    "h-3 w-3",
+                    ((notesValue || item.notes || "").trim())
+                      ? "text-[hsl(var(--accent-foreground))]"
+                      : "text-muted-foreground/40"
+                  )}
+                />
               </Button>
             </PopoverTrigger>
             <PopoverContent side="top" align="end" className="w-72">
@@ -411,12 +436,24 @@ function TouchSortableGroceryItem({
                   <Button
                     size="sm"
                     onClick={async () => {
+                      const trimmedNotes = notesValue.trim();
+                      const newNotes = trimmedNotes ? trimmedNotes : null;
+                      const currentNotes = item.notes?.trim() ? item.notes.trim() : null;
+
+                      if (newNotes === currentNotes) {
+                        setNotesValue(trimmedNotes);
+                        setNotesOpen(false);
+                        return;
+                      }
+
                       try {
                         const { error } = await supabase
                           .from('Grocery list')
-                          .update({ notes: notesValue.trim() ? notesValue.trim() : null })
+                          .update({ notes: newNotes })
                           .eq('id', item.id);
                         if (error) throw error;
+                        onNotesChange(item.id, newNotes);
+                        setNotesValue(trimmedNotes);
                         setNotesOpen(false);
                       } catch (e) {
                         toast({ title: 'Error', description: 'Failed to save note', variant: 'destructive' });
@@ -553,12 +590,23 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     if (!item.checked) {
       await processPurchase(item, item.Quantity || 1);
     } else {
-      setItems(prev => 
-        prev.map(i => 
+      setItems(prev =>
+        prev.map(i =>
           i.id === id ? { ...i, checked: !i.checked } : i
         )
       );
     }
+  };
+
+  const handleItemNotesChange = (id: number, notes: string | null) => {
+    setItems(prev =>
+      prev.map(item =>
+        item.id === id ? { ...item, notes: notes ?? null } : item
+      )
+    );
+    setDetailModalItem(prev =>
+      prev && prev.id === id ? { ...prev, notes: notes ?? null } : prev
+    );
   };
 
   const processPurchase = async (item: GroceryItem, selectedQuantity: number) => {
@@ -1435,6 +1483,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 onRemove={removeItem}
                 onReorder={reorderItems}
                 onImageClick={() => setDetailModalItem(item)}
+                onNotesChange={handleItemNotesChange}
                 index={index}
                 totalItems={filteredItems.length}
                 dragDestination={dragDestination}
