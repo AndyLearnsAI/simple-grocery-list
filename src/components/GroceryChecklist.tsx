@@ -49,6 +49,7 @@ function TouchSortableGroceryItem({
   onRemove, 
   onReorder,
   onImageClick,
+  onNotesChange,
   index,
   totalItems,
   dragDestination,
@@ -60,6 +61,7 @@ function TouchSortableGroceryItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onImageClick: (item: GroceryItem) => void;
+  onNotesChange: (id: number, notes: string | null) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -81,6 +83,10 @@ function TouchSortableGroceryItem({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const hasNotes = Boolean(item.notes?.trim());
+
+  useEffect(() => {
+    setNotesValue(item.notes || "");
+  }, [item.notes]);
 
   const handleQuantityEditToggle = () => {
     setIsQuantityEditing(prev => !prev);
@@ -205,7 +211,10 @@ function TouchSortableGroceryItem({
       ref={itemRef}
       className={cn(
         "py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden transition-colors",
-        hasNotes && !isDragging && !isQuantityEditing && "bg-accent/10 border-accent/30",
+        hasNotes &&
+          !isDragging &&
+          !isQuantityEditing &&
+          "bg-[hsl(var(--accent)/0.45)] border-[hsl(var(--accent)/0.6)] dark:bg-[hsl(var(--accent)/0.3)] dark:border-[hsl(var(--accent)/0.4)]",
         isDragging && "bg-green-50 border-green-200 shadow-lg",
         dragDestination !== null && dragDestination === index && "ring-2 ring-blue-500 ring-opacity-50",
         isQuantityEditing && "bg-green-50 border-green-200"
@@ -397,7 +406,14 @@ function TouchSortableGroceryItem({
                 className="h-6 w-6 p-0 mr-2"
                 title={((notesValue || item.notes || "").trim()) ? 'Edit note' : 'Add note'}
               >
-                <FileText className={`h-3 w-3 ${((notesValue || item.notes || "").trim()) ? 'text-green-600' : 'text-muted-foreground/40'}`} />
+                <FileText
+                  className={cn(
+                    "h-3 w-3",
+                    ((notesValue || item.notes || "").trim())
+                      ? "text-[hsl(var(--accent-foreground))]"
+                      : "text-muted-foreground/40"
+                  )}
+                />
               </Button>
             </PopoverTrigger>
             <PopoverContent side="top" align="end" className="w-72">
@@ -412,12 +428,24 @@ function TouchSortableGroceryItem({
                   <Button
                     size="sm"
                     onClick={async () => {
+                      const trimmedNotes = notesValue.trim();
+                      const newNotes = trimmedNotes ? trimmedNotes : null;
+                      const currentNotes = item.notes?.trim() ? item.notes.trim() : null;
+
+                      if (newNotes === currentNotes) {
+                        setNotesValue(trimmedNotes);
+                        setNotesOpen(false);
+                        return;
+                      }
+
                       try {
                         const { error } = await supabase
                           .from('Grocery list')
-                          .update({ notes: notesValue.trim() ? notesValue.trim() : null })
+                          .update({ notes: newNotes })
                           .eq('id', item.id);
                         if (error) throw error;
+                        onNotesChange(item.id, newNotes);
+                        setNotesValue(trimmedNotes);
                         setNotesOpen(false);
                       } catch (e) {
                         toast({ title: 'Error', description: 'Failed to save note', variant: 'destructive' });
@@ -554,12 +582,23 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     if (!item.checked) {
       await processPurchase(item, item.Quantity || 1);
     } else {
-      setItems(prev => 
-        prev.map(i => 
+      setItems(prev =>
+        prev.map(i =>
           i.id === id ? { ...i, checked: !i.checked } : i
         )
       );
     }
+  };
+
+  const handleItemNotesChange = (id: number, notes: string | null) => {
+    setItems(prev =>
+      prev.map(item =>
+        item.id === id ? { ...item, notes: notes ?? null } : item
+      )
+    );
+    setDetailModalItem(prev =>
+      prev && prev.id === id ? { ...prev, notes: notes ?? null } : prev
+    );
   };
 
   const processPurchase = async (item: GroceryItem, selectedQuantity: number) => {
@@ -1436,6 +1475,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 onRemove={removeItem}
                 onReorder={reorderItems}
                 onImageClick={() => setDetailModalItem(item)}
+                onNotesChange={handleItemNotesChange}
                 index={index}
                 totalItems={filteredItems.length}
                 dragDestination={dragDestination}
