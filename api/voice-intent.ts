@@ -1,6 +1,26 @@
 export const config = { runtime: 'edge' };
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+type AddItem = { name: string; quantity?: number; note?: string };
+type RemoveItem = { name: string };
+type AdjustItem = { name: string; delta: number };
+
+type PlanLists = {
+  add: AddItem[];
+  remove: RemoveItem[];
+  adjust: AdjustItem[];
+};
+
+type ChatCompletionContent = string | Array<{ type?: string; text?: string }>;
+
+type ChatCompletionResponse = {
+  choices?: Array<{
+    message?: {
+      content?: ChatCompletionContent;
+    };
+  }>;
+};
+
+const EMPTY_PLAN: PlanLists = { add: [], remove: [], adjust: [] };
 
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
@@ -22,8 +42,239 @@ Rules:
 - If nothing actionable, return an empty plan and a helpful summary saying "No grocery list changes requested."
 Return ONLY the JSON.`;
 
+
+const OPENAI_BASE = 'https://api.openai.com/v1';
+const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
+const CHAT_MODEL = 'gpt-4o-mini';
+
+function extractMessageText(payload: ChatCompletionResponse): string {
+  const choice = payload.choices?.[0];
+  const content = choice?.message?.content;
+
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .join('')
+      .trim();
+  }
+
+  return '';
+}
+
+function coerceAddList(value: unknown): AddItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<AddItem[]>((acc, entry) => {
+    if (typeof entry !== 'object' || entry === null) return acc;
+    const obj = entry as Record<string, unknown>;
+    const name = obj.name;
+    if (typeof name !== 'string' || !name.trim()) return acc;
+
+    const quantityValue = obj.quantity;
+    const quantity = typeof quantityValue === 'number' && Number.isFinite(quantityValue)
+      ? quantityValue
+      : undefined;
+    const noteValue = obj.note;
+    const note = typeof noteValue === 'string' && noteValue.trim() ? noteValue : undefined;
+
+    acc.push({ name, quantity, note });
+    return acc;
+  }, []);
+}
+
+function coerceRemoveList(value: unknown): RemoveItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<RemoveItem[]>((acc, entry) => {
+    if (typeof entry !== 'object' || entry === null) return acc;
+    const obj = entry as Record<string, unknown>;
+    const name = obj.name;
+    if (typeof name !== 'string' || !name.trim()) return acc;
+    acc.push({ name });
+    return acc;
+  }, []);
+}
+
+function coerceAdjustList(value: unknown): AdjustItem[] {
+  if (!Array.isArray(value)) return [];
+  return value.reduce<AdjustItem[]>((acc, entry) => {
+    if (typeof entry !== 'object' || entry === null) return acc;
+    const obj = entry as Record<string, unknown>;
+    const name = obj.name;
+    const deltaValue = obj.delta;
+    if (typeof name !== 'string' || !name.trim()) return acc;
+    if (typeof deltaValue !== 'number' || !Number.isFinite(deltaValue)) return acc;
+    acc.push({ name, delta: deltaValue });
+    return acc;
+  }, []);
+}
+
+function coercePlan(value: unknown): PlanLists {
+  if (typeof value !== 'object' || value === null) return EMPTY_PLAN;
+  const obj = value as Record<string, unknown>;
+  return {
+    add: coerceAddList(obj.add),
+    remove: coerceRemoveList(obj.remove),
+    adjust: coerceAdjustList(obj.adjust),
+  };
+}
+
+async function transcribeAudio(apiKey: string, audio: Blob): Promise<string> {
+  const transcriptionBody = new FormData();
+  const filename = audio instanceof File && typeof audio.name === 'string' && audio.name ? audio.name : 'voice.webm';
+  transcriptionBody.append('file', audio, filename);
+  transcriptionBody.append('model', TRANSCRIPTION_MODEL);
+
+  const response = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: transcriptionBody,
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Transcription failed: ${errorText}`);
+  }
+
+  const json = (await response.json()) as { text?: string };
+  return json.text?.trim() ?? '';
+}
+
+async function generateConversation(apiKey: string, transcript: string): Promise<string> {
+  const response = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      temperature: 0.7,
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a friendly grocery list assistant. Keep responses to 1-2 sentences.',
+        },
+        {
+          role: 'user',
+          content: transcript,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Conversation failed: ${errorText}`);
+  }
+
+  const json = (await response.json()) as ChatCompletionResponse;
+  const text = extractMessageText(json);
+  return text || 'I can help you with your grocery list!';
+}
+
+async function generatePlan(apiKey: string, transcript: string): Promise<PlanLists> {
+  const response = await fetch(`${OPENAI_BASE}/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: CHAT_MODEL,
+      temperature: 0.1,
+      response_format: {
+        type: 'json_schema',
+        json_schema: {
+          name: 'voice_plan',
+          schema: {
+            type: 'object',
+            required: ['summary', 'plan'],
+            additionalProperties: false,
+            properties: {
+              summary: { type: 'string' },
+              plan: {
+                type: 'object',
+                required: ['add', 'remove', 'adjust'],
+                additionalProperties: false,
+                properties: {
+                  add: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['name'],
+                      additionalProperties: false,
+                      properties: {
+                        name: { type: 'string' },
+                        quantity: { type: 'number' },
+                        note: { type: 'string' },
+                      },
+                    },
+                  },
+                  remove: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['name'],
+                      additionalProperties: false,
+                      properties: {
+                        name: { type: 'string' },
+                      },
+                    },
+                  },
+                  adjust: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      required: ['name', 'delta'],
+                      additionalProperties: false,
+                      properties: {
+                        name: { type: 'string' },
+                        delta: { type: 'number' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      messages: [
+        {
+          role: 'system',
+          content: SYSTEM_PROMPT,
+        },
+        {
+          role: 'user',
+          content: `User request: ${transcript}`,
+        },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Planning failed: ${errorText}`);
+  }
+
+  const json = (await response.json()) as ChatCompletionResponse;
+  const text = extractMessageText(json);
+  if (!text) return EMPTY_PLAN;
+
+  try {
+    const parsed = JSON.parse(text) as { plan?: unknown };
+    return coercePlan(parsed.plan);
+  } catch {
+    return EMPTY_PLAN;
+  }
+}
+
 export default async function handler(req: Request): Promise<Response> {
-  // CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
@@ -35,6 +286,7 @@ export default async function handler(req: Request): Promise<Response> {
       },
     });
   }
+
   if (req.method !== 'POST') {
     return new Response('Method Not Allowed', {
       status: 405,
@@ -42,109 +294,83 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return new Response('Server misconfigured: missing GEMINI_API_KEY', { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+    return new Response('Server misconfigured: missing OPENAI_API_KEY', {
+      status: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
+    });
   }
-  
-  const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
-    let providedTranscript: any = null;
-    let audio: any = null;
     const contentType = req.headers.get('content-type') || '';
+    let providedTranscript: string | null = null;
+    let audioBlob: Blob | null = null;
+
     if (contentType.includes('application/json')) {
-      const body = await req.json().catch(() => ({}));
-      providedTranscript = body.transcript;
+      const body = (await req.json().catch(() => null)) as { transcript?: unknown } | null;
+      if (body && typeof body.transcript === 'string' && body.transcript.trim()) {
+        providedTranscript = body.transcript.trim();
+      }
     } else {
       const form = await req.formData();
-      audio = form.get('audio');
-      providedTranscript = form.get('transcript');
+      const transcriptEntry = form.get('transcript');
+      if (typeof transcriptEntry === 'string' && transcriptEntry.trim()) {
+        providedTranscript = transcriptEntry.trim();
+      }
+      const audioEntry = form.get('audio');
+      if (audioEntry instanceof Blob && audioEntry.size > 0) {
+        audioBlob = audioEntry;
+      }
     }
 
-    // 1) Transcribe (if audio present), otherwise use provided transcript
-    let transcript = '';
-    if (audio instanceof Blob && audio.size > 0) {
-      // Convert audio blob to base64
-      const audioBuffer = await audio.arrayBuffer();
-      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
-      
-      // Use Gemini for transcription
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-      const prompt = "Please transcribe this audio to text. Return only the transcribed text.";
-      
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            data: audioBase64,
-            mimeType: audio.type || 'audio/webm'
-          }
-        }
-      ]);
-      
-      transcript = result.response.text() || '';
-    } else if (typeof providedTranscript === 'string' && providedTranscript.trim()) {
-      transcript = providedTranscript.trim();
-    } else {
-      return new Response('Bad Request: missing audio or transcript', { status: 400 });
+    let transcript = providedTranscript ?? '';
+    if (!transcript) {
+      if (!audioBlob) {
+        return new Response('Bad Request: missing audio or transcript', {
+          status: 400,
+          headers: { 'Access-Control-Allow-Origin': '*' },
+        });
+      }
+      transcript = await transcribeAudio(apiKey, audioBlob);
     }
 
-    // 2) Generate conversational response and parse with LLM
-    const model = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash-lite',
-      generationConfig: {
-        temperature: 0.7
-      }
-    });
-    
-    // First, generate a conversational response
-    const conversationPrompt = `You are a helpful grocery list assistant. The user said: "${transcript}"
-    
-    Respond in a friendly, conversational way. If they want to modify their grocery list, acknowledge what they want to do and be helpful. If it's not grocery-related, politely redirect them to grocery list tasks.
-    
-    Keep your response to 1-2 sentences.`;
-    
-    const conversationResult = await model.generateContent(conversationPrompt);
-    const conversationalResponse = conversationResult.response.text() || "I can help you with your grocery list!";
-    
-    // Then, parse into structured plan
-    const parseModel = genAI.getGenerativeModel({ 
-      model: 'gemini-2.5-flash-lite',
-      generationConfig: {
-        temperature: 0.1,
-        responseMimeType: 'application/json'
-      }
-    });
-    
-    const parseResult = await parseModel.generateContent([
-      SYSTEM_PROMPT,
-      `User request: ${transcript}`
+    if (!transcript) {
+      return new Response('Transcription empty', {
+        status: 422,
+        headers: { 'Access-Control-Allow-Origin': '*' },
+      });
+    }
+
+    const [conversation, plan] = await Promise.all([
+      generateConversation(apiKey, transcript),
+      generatePlan(apiKey, transcript),
     ]);
-    
-    const content = parseResult.response.text() || '{}';
 
-    let parsed: any;
-    try {
-      parsed = JSON.parse(content);
-    } catch (e) {
-      parsed = { summary: 'AI could not parse request', plan: { add: [], remove: [], adjust: [] } };
-    }
-
-    return new Response(JSON.stringify({ 
-      transcript, 
-      summary: conversationalResponse, 
-      plan: parsed.plan || { add: [], remove: [], adjust: [] }
-    }), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
+    return new Response(
+      JSON.stringify({
+        transcript,
+        summary: conversation,
+        plan,
+      }),
+      {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
       },
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'unknown error';
+    return new Response(`Server error: ${message}`, {
+      status: 500,
+      headers: { 'Access-Control-Allow-Origin': '*' },
     });
-  } catch (e: any) {
-    return new Response(`Server error: ${e?.message || 'unknown'}`, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
   }
 }
+
+
+
 
 
