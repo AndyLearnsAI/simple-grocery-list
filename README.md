@@ -2,14 +2,15 @@ Simple grocery app
 - Saved lists
 - Purchase history
 - Weekly specials (currently Coles only)
-- Enhanced voice assistant powered by Gemini 2.5 Flash Lite with streaming responses
+- Enhanced voice assistant powered by OpenAI gpt-4o models with streaming responses
 
 ## Setup
 
 ### Environment Variables
 Create a `.env` file in the root directory with:
 ```
-GEMINI_API_KEY=your_gemini_api_key_here
+OPENAI_API_KEY=your_openai_api_key_here
 ```
 
-Get your Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey)
+Get your OpenAI API key from [platform.openai.com](https://platform.openai.com/api-keys)
+
