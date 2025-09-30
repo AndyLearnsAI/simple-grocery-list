@@ -1,15 +1,12 @@
 import express from 'express';
 import cors from 'cors';
-import multer from 'multer';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const app = express();
 const PORT = process.env.PORT || 8787;
 
 app.use(cors());
-app.use(express.json({ limit: '5mb' }));
-
-const upload = multer();
+app.use(express.json({ limit: '10mb' }));
 
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
@@ -31,7 +28,7 @@ Rules:
 - If nothing actionable, return an empty plan and a helpful summary saying "No grocery list changes requested."
 Return ONLY the JSON.`;
 
-app.post('/api/voice-intent', upload.single('audio'), async (req, res) => {
+app.post('/api/voice-intent', async (req, res) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
@@ -41,16 +38,18 @@ app.post('/api/voice-intent', upload.single('audio'), async (req, res) => {
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const contentType = req.headers['content-type'] || '';
-    let transcript = '';
-    let providedTranscript = '';
-
-    if (typeof req.body?.transcript === 'string') {
-      providedTranscript = req.body.transcript.trim();
+    if (!contentType.includes('application/json')) {
+      return res.status(415).send('Unsupported content type');
     }
 
-    const file = req.file;
-    if (contentType.includes('multipart/form-data') && file?.buffer?.length) {
-      const audioBase64 = file.buffer.toString('base64');
+    const body = req.body ?? {};
+    const providedTranscript = typeof body.transcript === 'string' ? body.transcript.trim() : '';
+    const audioBase64 = typeof body.audioBase64 === 'string' ? body.audioBase64 : '';
+    const audioMime = typeof body.mimeType === 'string' && body.mimeType ? body.mimeType : 'audio/webm';
+
+    let transcript = '';
+
+    if (audioBase64) {
       const prompt = 'Please transcribe this audio to text. Return only the transcribed text.';
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const result = await model.generateContent([
@@ -58,13 +57,11 @@ app.post('/api/voice-intent', upload.single('audio'), async (req, res) => {
         {
           inlineData: {
             data: audioBase64,
-            mimeType: file.mimetype || 'audio/webm',
+            mimeType: audioMime,
           },
         },
       ]);
       transcript = result?.response?.text()?.trim() || '';
-    } else if (contentType.includes('application/json')) {
-      transcript = providedTranscript;
     } else {
       transcript = providedTranscript;
     }

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useRef, useState, useEffect } from "react";
 import { Mic, Square, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -10,6 +10,22 @@ import type { GroceryChecklistHandle } from "@/components/GroceryChecklist";
 type VoiceAssistantProps = {
   checklistRef: React.RefObject<GroceryChecklistHandle>;
 };
+
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read audio"));
+    reader.onload = () => {
+      if (typeof reader.result !== "string") {
+        reject(new Error("Unexpected audio result"));
+        return;
+      }
+      const commaIndex = reader.result.indexOf(",");
+      resolve(commaIndex >= 0 ? reader.result.slice(commaIndex + 1) : reader.result);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
 
 export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
   const recorder = useAudioRecorder();
@@ -79,55 +95,57 @@ export function VoiceAssistant({ checklistRef }: VoiceAssistantProps) {
       return;
     }
     setProcessing(true);
-    
+
     try {
+      const audioBase64 = await blobToBase64(blob);
       const base = import.meta.env.VITE_API_BASE_URL || '';
-      const fd = new FormData();
-      fd.append('audio', blob, 'voice.webm');
-      const res = await fetch(`${base}/api/voice-intent`, { method: 'POST', body: fd });
-      setProcessing(false);
-      
-      if (res.ok) {
-        const data = await res.json();
-        const raw = data?.transcript || '';
-        
-        // Immediately show transcript
-        if (raw) {
-          setTranscript(raw);
-          setMessages((prev) => [...prev, { role: 'user', content: raw }]);
-        }
-        
-        // Start streaming response
-        if (data?.summary) {
-          setIsStreaming(true);
-          setStreamingResponse("");
-          await streamText(data.summary);
-          
-          // After streaming, process the plan
-          const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
-          const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
-          
-          if (isClear) {
-            setPlan(llmPlan);
-            setMessages((prev) => [...prev, { 
-              role: 'assistant', 
-              content: data.summary, 
-              kind: 'plan' 
-            }]);
-          } else {
-            setMessages((prev) => [...prev, { 
-              role: 'assistant', 
-              content: data.summary || "I heard you, but I'm not sure what changes you'd like to make to your grocery list."
-            }]);
-          }
-        }
-        return;
+      const res = await fetch(`${base}/api/voice-intent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioBase64,
+          mimeType: blob.type || 'audio/webm'
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error(await res.text().catch(() => 'Request failed'));
       }
-      
-      setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
+
+      const data = await res.json();
+      const raw = data?.transcript || '';
+
+      if (raw) {
+        setTranscript(raw);
+        setMessages((prev) => [...prev, { role: 'user', content: raw }]);
+      }
+
+      if (data?.summary) {
+        setIsStreaming(true);
+        setStreamingResponse("");
+        await streamText(data.summary);
+
+        const llmPlan: ParsedPlan = (data?.plan ? { ...data.plan, raw } : { add: [], remove: [], adjust: [], raw });
+        const isClear = (llmPlan.add.length + llmPlan.remove.length + llmPlan.adjust.length) > 0;
+
+        if (isClear) {
+          setPlan(llmPlan);
+          setMessages((prev) => [...prev, {
+            role: 'assistant',
+            content: data.summary,
+            kind: 'plan'
+          }]);
+        } else {
+          setMessages((prev) => [...prev, {
+            role: 'assistant',
+            content: data.summary || "I heard you, but I'm not sure what changes you'd like to make to your grocery list."
+          }]);
+        }
+      }
     } catch (e) {
-      setProcessing(false);
       setMessages((prev) => [...prev, { role: 'assistant', content: 'AI not currently available' }]);
+    } finally {
+      setProcessing(false);
     }
   };
 

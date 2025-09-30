@@ -75,44 +75,64 @@ export default async function handler(req: Request): Promise<Response> {
   const genAI = new GoogleGenerativeAI(apiKey);
 
   try {
-    let providedTranscript: any = null;
-    let audio: any = null;
+    let providedTranscript: string | null = null;
+    let audio: Blob | null = null;
+    let audioBase64: string | null = null;
+    let audioMime: string | null = null;
     const contentType = req.headers.get('content-type') || '';
     if (contentType.includes('application/json')) {
-      const body = await req.json().catch(() => ({}));
-      providedTranscript = body.transcript;
+      const body = await req.json().catch(() => ({} as Record<string, unknown>));
+      providedTranscript = typeof body.transcript === 'string' ? body.transcript : null;
+      audioBase64 = typeof body.audioBase64 === 'string' ? body.audioBase64 : null;
+      audioMime = typeof body.mimeType === 'string' ? body.mimeType : null;
     } else {
       const form = await req.formData();
-      audio = form.get('audio');
-      providedTranscript = form.get('transcript');
+      const formAudio = form.get('audio');
+      if (formAudio instanceof Blob) {
+        audio = formAudio;
+      }
+      const formTranscript = form.get('transcript');
+      providedTranscript = typeof formTranscript === 'string' ? formTranscript : null;
     }
 
     // 1) Transcribe (if audio present), otherwise use provided transcript
     let transcript = '';
-    if (audio instanceof Blob && audio.size > 0) {
-      // Convert audio blob to base64 without relying on Node-specific globals
-      const audioBuffer = await audio.arrayBuffer();
-      const audioBase64 = toBase64(audioBuffer);
-      
-      // Use Gemini for transcription
+    if (audioBase64 && audioBase64.length > 0) {
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
       const prompt = "Please transcribe this audio to text. Return only the transcribed text.";
-      
+
       const result = await model.generateContent([
         prompt,
         {
           inlineData: {
             data: audioBase64,
+            mimeType: audioMime || 'audio/webm'
+          }
+        }
+      ]);
+
+      transcript = result.response.text() || '';
+    } else if (audio instanceof Blob && audio.size > 0) {
+      const audioBuffer = await audio.arrayBuffer();
+      const converted = toBase64(audioBuffer);
+      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const prompt = "Please transcribe this audio to text. Return only the transcribed text.";
+
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            data: converted,
             mimeType: audio.type || 'audio/webm'
           }
         }
       ]);
-      
+
       transcript = result.response.text() || '';
     } else if (typeof providedTranscript === 'string' && providedTranscript.trim()) {
       transcript = providedTranscript.trim();
     } else {
-      return new Response('Bad Request: missing audio or transcript', { status: 400 });
+      return new Response('Bad Request: missing audio or transcript', { status: 400, headers: { 'Access-Control-Allow-Origin': '*' } });
     }
 
     // 2) Generate conversational response and parse with LLM
