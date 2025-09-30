@@ -2,6 +2,31 @@ export const config = { runtime: 'edge' };
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+const toBase64 = (buffer: ArrayBuffer) => {
+  const bytes = new Uint8Array(buffer);
+  const base64Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+  let base64 = '';
+
+  for (let i = 0; i < bytes.length; i += 3) {
+    const byte1 = bytes[i];
+    const byte2 = bytes[i + 1];
+    const byte3 = bytes[i + 2];
+
+    const enc1 = byte1 >> 2;
+    const enc2 = ((byte1 & 3) << 4) | (byte2 !== undefined ? (byte2 >> 4) : 0);
+    const enc3 = byte2 !== undefined ? (((byte2 & 15) << 2) | (byte3 !== undefined ? (byte3 >> 6) : 0)) : 64;
+    const enc4 = byte3 !== undefined ? (byte3 & 63) : 64;
+
+    base64 +=
+      base64Chars.charAt(enc1) +
+      base64Chars.charAt(enc2) +
+      base64Chars.charAt(enc3) +
+      base64Chars.charAt(enc4);
+  }
+
+  return base64;
+};
+
 const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
 Return strict JSON with this shape:
 {
@@ -65,9 +90,9 @@ export default async function handler(req: Request): Promise<Response> {
     // 1) Transcribe (if audio present), otherwise use provided transcript
     let transcript = '';
     if (audio instanceof Blob && audio.size > 0) {
-      // Convert audio blob to base64
+      // Convert audio blob to base64 without relying on Node-specific globals
       const audioBuffer = await audio.arrayBuffer();
-      const audioBase64 = btoa(String.fromCharCode(...new Uint8Array(audioBuffer)));
+      const audioBase64 = toBase64(audioBuffer);
       
       // Use Gemini for transcription
       const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
