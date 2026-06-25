@@ -1459,6 +1459,32 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 </div>
               </div>
             )}
+            {/* Buy Later section, between the main list and the bottom add bar */}
+            <div className="pt-4">
+              <h3 className="text-sm font-semibold text-muted-foreground mb-2">Buy Later</h3>
+              <div className={`space-y-0 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+                {buyLaterItems.map((item, index) => (
+                  <TouchSortableGroceryItem
+                    key={item.id}
+                    item={item}
+                    onToggle={toggleItem}
+                    onUpdateQuantity={updateQuantity}
+                    onRemove={removeItem}
+                    onReorder={(from, to) => handleReorder(buyLaterItems, from, to)}
+                    onImageClick={() => setDetailModalItem(item)}
+                    index={index}
+                    totalItems={buyLaterItems.length}
+                    dragDestination={dragDestination}
+                    onDragDestinationChange={setDragDestination}
+                  />
+                ))}
+                {buyLaterItems.length === 0 && (
+                  <div className="py-4 text-center">
+                    <div className="text-sm text-muted-foreground">Nothing here yet</div>
+                  </div>
+                )}
+              </div>
+            </div>
             {/* Bottom Add bar inside the same card as the list */}
             <div className="flex gap-2 items-center pt-4">
               <Input
@@ -1477,33 +1503,6 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
-          </div>
-        </div>
-      </Card>
-      <Card className="px-0 py-4 shadow-card">
-        <div className="space-y-0 px-4">
-          <h3 className="text-sm font-semibold text-muted-foreground mb-2">Buy Later</h3>
-          <div className={`space-y-0 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
-            {buyLaterItems.map((item, index) => (
-              <TouchSortableGroceryItem
-                key={item.id}
-                item={item}
-                onToggle={toggleItem}
-                onUpdateQuantity={updateQuantity}
-                onRemove={removeItem}
-                onReorder={(from, to) => handleReorder(buyLaterItems, from, to)}
-                onImageClick={() => setDetailModalItem(item)}
-                index={index}
-                totalItems={buyLaterItems.length}
-                dragDestination={dragDestination}
-                onDragDestinationChange={setDragDestination}
-              />
-            ))}
-            {buyLaterItems.length === 0 && (
-              <div className="py-4 text-center">
-                <div className="text-sm text-muted-foreground">Nothing here yet</div>
-              </div>
-            )}
           </div>
         </div>
       </Card>
