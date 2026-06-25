@@ -12,7 +12,7 @@ import { SavedlistModal } from "./SavedlistModal";
 import { SpecialsModal } from "./SpecialsModal";
 import { QuantitySelector } from "./QuantitySelector";
 import { ItemDetailModal } from "./ItemDetailModal";
-import { parseSmartSyntax, normalizePlural, getIconForItem } from "@/lib/utils";
+import { parseSmartSyntax, normalizePlural, getIconForItem, cn } from "@/lib/utils";
 import { ItemIcon } from "./ItemIcon";
 
 interface GroceryItem {
@@ -79,6 +79,11 @@ function TouchSortableGroceryItem({
   const editQuantityRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const hasNotes = Boolean(item.notes?.trim());
+
+  useEffect(() => {
+    setNotesValue(item.notes || "");
+  }, [item.notes]);
 
   const handleQuantityEditToggle = () => {
     setIsQuantityEditing(prev => !prev);
@@ -199,15 +204,18 @@ function TouchSortableGroceryItem({
   }, [isDragging, dragStartY]);
 
   return (
-    <Card 
+    <Card
       ref={itemRef}
-      className={`py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden ${
-        isDragging ? 'bg-green-50 border-green-200 shadow-lg' : ''
-      } ${
-        dragDestination !== null && dragDestination === index ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
-      } ${
-        isQuantityEditing ? 'bg-green-50 border-green-200' : ''
-      }`}
+      className={cn(
+        "py-2 px-0 shadow-card hover:shadow-elegant relative overflow-hidden transition-colors",
+        hasNotes &&
+          !isDragging &&
+          !isQuantityEditing &&
+          "bg-[hsl(var(--accent)/0.45)] border-[hsl(var(--accent)/0.6)] dark:bg-[hsl(var(--accent)/0.3)] dark:border-[hsl(var(--accent)/0.4)]",
+        isDragging && "bg-green-50 border-green-200 shadow-lg",
+        dragDestination !== null && dragDestination === index && "ring-2 ring-blue-500 ring-opacity-50",
+        isQuantityEditing && "bg-green-50 border-green-200"
+      )}
       style={{
         transform: isDragging ? `translateY(${dragOffset}px) scale(1.02)` : 'none',
         zIndex: isDragging ? 1000 : 'auto',
@@ -531,8 +539,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     if (!item.checked) {
       await processPurchase(item, item.Quantity || 1);
     } else {
-      setItems(prev => 
-        prev.map(i => 
+      setItems(prev =>
+        prev.map(i =>
           i.id === id ? { ...i, checked: !i.checked } : i
         )
       );
