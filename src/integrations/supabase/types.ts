@@ -29,6 +29,7 @@ export type Database = {
           img: string | null
           link: string | null
           auto_icon: string | null
+          buy_later: boolean
         }
         Insert: {
           created_at?: string
@@ -44,6 +45,7 @@ export type Database = {
           img?: string | null
           link?: string | null
           auto_icon?: string | null
+          buy_later?: boolean
         }
         Update: {
           created_at?: string
@@ -59,6 +61,7 @@ export type Database = {
           img?: string | null
           link?: string | null
           auto_icon?: string | null
+          buy_later?: boolean
         }
         Relationships: []
       }
