@@ -81,10 +81,6 @@ function TouchSortableGroceryItem({
   const { toast } = useToast();
   const hasNotes = Boolean(item.notes?.trim());
 
-  useEffect(() => {
-    setNotesValue(item.notes || "");
-  }, [item.notes]);
-
   const handleQuantityEditToggle = () => {
     setIsQuantityEditing(prev => !prev);
     setEditQuantity(item.Quantity || 1);
