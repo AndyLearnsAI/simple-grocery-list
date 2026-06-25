@@ -1,376 +1,233 @@
-export const config = { runtime: 'edge' };
+export const config = { runtime: "edge" };
 
-type AddItem = { name: string; quantity?: number; note?: string };
-type RemoveItem = { name: string };
-type AdjustItem = { name: string; delta: number };
+import { parseVoiceToPlan, type ParsedPlan } from "../src/services/voiceIntent";
 
-type PlanLists = {
-  add: AddItem[];
-  remove: RemoveItem[];
-  adjust: AdjustItem[];
-};
+const ASSEMBLY_BASE = "https://api.assemblyai.com/v2";
+const ASSEMBLY_UPLOAD_URL = `${ASSEMBLY_BASE}/upload`;
+const ASSEMBLY_TRANSCRIPT_URL = `${ASSEMBLY_BASE}/transcript`;
+const POLL_INTERVAL_MS = 1500;
+const MAX_POLL_ATTEMPTS = 18;
 
-type ChatCompletionContent = string | Array<{ type?: string; text?: string }>;
-
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: ChatCompletionContent;
-    };
-  }>;
-};
-
-const EMPTY_PLAN: PlanLists = { add: [], remove: [], adjust: [] };
-
-const SYSTEM_PROMPT = `You are an assistant that converts grocery-related natural language into next actions and a machine-readable plan.
-Return strict JSON with this shape:
-{
-  "summary": string, // ALWAYS format as HTML list items: <br>- bananas x2<br>- apples x4<br>- milk (remove)<br>- carrots (+3)
-  "plan": {
-    "add": Array<{"name": string, "quantity"?: number, "note"?: string}>,
-    "remove": Array<{"name": string}>,
-    "adjust": Array<{"name": string, "delta": number}>
-  }
-}
-Rules:
-- CRITICAL: The summary MUST ALWAYS be formatted as HTML with <br> line breaks and list items in this exact format: <br>- itemname x# or <br>- itemname (remove) or <br>- itemname (+#) or <br>- itemname (-#)
-- Split enumerations like "add two chickens three steaks and four pork chops" into separate items with correct quantities.
-- Numbers may be words (two, three, four) or digits (2, 3, 4).
-- Merge duplicates by case-insensitive name.
-- quantity defaults to 1 if omitted.
-- For adjustments, positive delta means increase, negative means decrease.
-- If nothing actionable, return an empty plan and a helpful summary saying "No grocery list changes requested."
-Return ONLY the JSON.`;
-
-
-const OPENAI_BASE = 'https://api.openai.com/v1';
-const TRANSCRIPTION_MODEL = 'gpt-4o-mini-transcribe';
-const CHAT_MODEL = 'gpt-4o-mini';
-
-function extractMessageText(payload: ChatCompletionResponse): string {
-  const choice = payload.choices?.[0];
-  const content = choice?.message?.content;
-
-  if (typeof content === 'string') {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    return content
-      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
-      .join('')
-      .trim();
-  }
-
-  return '';
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
-function coerceAddList(value: unknown): AddItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.reduce<AddItem[]>((acc, entry) => {
-    if (typeof entry !== 'object' || entry === null) return acc;
-    const obj = entry as Record<string, unknown>;
-    const name = obj.name;
-    if (typeof name !== 'string' || !name.trim()) return acc;
-
-    const quantityValue = obj.quantity;
-    const quantity = typeof quantityValue === 'number' && Number.isFinite(quantityValue)
-      ? quantityValue
-      : undefined;
-    const noteValue = obj.note;
-    const note = typeof noteValue === 'string' && noteValue.trim() ? noteValue : undefined;
-
-    acc.push({ name, quantity, note });
-    return acc;
-  }, []);
-}
-
-function coerceRemoveList(value: unknown): RemoveItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.reduce<RemoveItem[]>((acc, entry) => {
-    if (typeof entry !== 'object' || entry === null) return acc;
-    const obj = entry as Record<string, unknown>;
-    const name = obj.name;
-    if (typeof name !== 'string' || !name.trim()) return acc;
-    acc.push({ name });
-    return acc;
-  }, []);
-}
-
-function coerceAdjustList(value: unknown): AdjustItem[] {
-  if (!Array.isArray(value)) return [];
-  return value.reduce<AdjustItem[]>((acc, entry) => {
-    if (typeof entry !== 'object' || entry === null) return acc;
-    const obj = entry as Record<string, unknown>;
-    const name = obj.name;
-    const deltaValue = obj.delta;
-    if (typeof name !== 'string' || !name.trim()) return acc;
-    if (typeof deltaValue !== 'number' || !Number.isFinite(deltaValue)) return acc;
-    acc.push({ name, delta: deltaValue });
-    return acc;
-  }, []);
-}
-
-function coercePlan(value: unknown): PlanLists {
-  if (typeof value !== 'object' || value === null) return EMPTY_PLAN;
-  const obj = value as Record<string, unknown>;
-  return {
-    add: coerceAddList(obj.add),
-    remove: coerceRemoveList(obj.remove),
-    adjust: coerceAdjustList(obj.adjust),
-  };
-}
-
-async function transcribeAudio(apiKey: string, audio: Blob): Promise<string> {
-  const transcriptionBody = new FormData();
-  const filename = audio instanceof File && typeof audio.name === 'string' && audio.name ? audio.name : 'voice.webm';
-  transcriptionBody.append('file', audio, filename);
-  transcriptionBody.append('model', TRANSCRIPTION_MODEL);
-
-  const response = await fetch(`${OPENAI_BASE}/audio/transcriptions`, {
-    method: 'POST',
+async function uploadAudioBlob(apiKey: string, audio: Blob): Promise<string> {
+  const buffer = await audio.arrayBuffer();
+  const response = await fetch(ASSEMBLY_UPLOAD_URL, {
+    method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: apiKey,
+      "Content-Type": "application/octet-stream",
     },
-    body: transcriptionBody,
+    body: buffer,
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Transcription failed: ${errorText}`);
+    const message = await response.text();
+    throw new Error(`AssemblyAI upload failed: ${message}`);
   }
 
-  const json = (await response.json()) as { text?: string };
-  return json.text?.trim() ?? '';
+  const json = (await response.json()) as { upload_url?: string };
+  const uploadUrl = json.upload_url;
+  if (!uploadUrl) {
+    throw new Error("AssemblyAI upload response missing upload_url");
+  }
+
+  return uploadUrl;
 }
 
-async function generateConversation(apiKey: string, transcript: string): Promise<string> {
-  const response = await fetch(`${OPENAI_BASE}/chat/completions`, {
-    method: 'POST',
+async function requestTranscript(apiKey: string, uploadUrl: string): Promise<string> {
+  const response = await fetch(ASSEMBLY_TRANSCRIPT_URL, {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: apiKey,
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: CHAT_MODEL,
-      temperature: 0.7,
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a friendly grocery list assistant. Keep responses to 1-2 sentences.',
-        },
-        {
-          role: 'user',
-          content: transcript,
-        },
-      ],
+      audio_url: uploadUrl,
+      language_detection: true,
+      punctuate: true,
+      format_text: true,
+      disfluencies: false,
     }),
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Conversation failed: ${errorText}`);
+    const message = await response.text();
+    throw new Error(`AssemblyAI transcript request failed: ${message}`);
   }
 
-  const json = (await response.json()) as ChatCompletionResponse;
-  const text = extractMessageText(json);
-  return text || 'I can help you with your grocery list!';
+  const json = (await response.json()) as { id?: string };
+  const transcriptId = json.id;
+  if (!transcriptId) {
+    throw new Error("AssemblyAI transcript response missing id");
+  }
+
+  return transcriptId;
 }
 
-async function generatePlan(apiKey: string, transcript: string): Promise<PlanLists> {
-  const response = await fetch(`${OPENAI_BASE}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: CHAT_MODEL,
-      temperature: 0.1,
-      response_format: {
-        type: 'json_schema',
-        json_schema: {
-          name: 'voice_plan',
-          schema: {
-            type: 'object',
-            required: ['summary', 'plan'],
-            additionalProperties: false,
-            properties: {
-              summary: { type: 'string' },
-              plan: {
-                type: 'object',
-                required: ['add', 'remove', 'adjust'],
-                additionalProperties: false,
-                properties: {
-                  add: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['name'],
-                      additionalProperties: false,
-                      properties: {
-                        name: { type: 'string' },
-                        quantity: { type: 'number' },
-                        note: { type: 'string' },
-                      },
-                    },
-                  },
-                  remove: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['name'],
-                      additionalProperties: false,
-                      properties: {
-                        name: { type: 'string' },
-                      },
-                    },
-                  },
-                  adjust: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      required: ['name', 'delta'],
-                      additionalProperties: false,
-                      properties: {
-                        name: { type: 'string' },
-                        delta: { type: 'number' },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
+async function pollTranscript(apiKey: string, transcriptId: string): Promise<string> {
+  for (let attempt = 0; attempt < MAX_POLL_ATTEMPTS; attempt += 1) {
+    await delay(attempt === 0 ? POLL_INTERVAL_MS : POLL_INTERVAL_MS * 2);
+
+    const response = await fetch(`${ASSEMBLY_TRANSCRIPT_URL}/${transcriptId}`, {
+      headers: {
+        Authorization: apiKey,
       },
-      messages: [
-        {
-          role: 'system',
-          content: SYSTEM_PROMPT,
-        },
-        {
-          role: 'user',
-          content: `User request: ${transcript}`,
-        },
-      ],
-    }),
-  });
+    });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Planning failed: ${errorText}`);
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(`AssemblyAI transcript polling failed: ${message}`);
+    }
+
+    const json = (await response.json()) as {
+      status?: string;
+      text?: string;
+      error?: string;
+    };
+
+    if (json.status === "completed") {
+      return (json.text ?? "").trim();
+    }
+
+    if (json.status === "error") {
+      throw new Error(`AssemblyAI transcription error: ${json.error ?? "unknown"}`);
+    }
   }
 
-  const json = (await response.json()) as ChatCompletionResponse;
-  const text = extractMessageText(json);
-  if (!text) return EMPTY_PLAN;
+  throw new Error("AssemblyAI transcription timed out");
+}
 
-  try {
-    const parsed = JSON.parse(text) as { plan?: unknown };
-    return coercePlan(parsed.plan);
-  } catch {
-    return EMPTY_PLAN;
+function buildSummary(plan: ParsedPlan): string {
+  const lines: string[] = [];
+
+  for (const item of plan.add) {
+    const quantity = item.quantity && item.quantity > 0 ? ` x${item.quantity}` : "";
+    const note = item.note ? ` (${item.note})` : "";
+    lines.push(`<br>- ${item.name}${quantity}${note}`);
   }
+
+  for (const item of plan.remove) {
+    lines.push(`<br>- ${item.name} (remove)`);
+  }
+
+  for (const item of plan.adjust) {
+    const delta = item.delta;
+    if (!delta) continue;
+    const sign = delta > 0 ? "+" : "-";
+    lines.push(`<br>- ${item.name} (${sign}${Math.abs(delta)})`);
+  }
+
+  if (!lines.length) {
+    return "No grocery list changes requested.";
+  }
+
+  return `Here's what I can do:${lines.join("")}`;
 }
 
 export default async function handler(req: Request): Promise<Response> {
-  if (req.method === 'OPTIONS') {
+  if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Access-Control-Max-Age': '86400',
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        "Access-Control-Max-Age": "86400",
       },
     });
   }
 
-  if (req.method !== 'POST') {
-    return new Response('Method Not Allowed', {
+  if (req.method !== "POST") {
+    return new Response("Method Not Allowed", {
       status: 405,
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: { "Access-Control-Allow-Origin": "*" },
     });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.ASSEMBLYAI_API_KEY;
   if (!apiKey) {
-    return new Response('Server misconfigured: missing OPENAI_API_KEY', {
+    return new Response("Server misconfigured: missing ASSEMBLYAI_API_KEY", {
       status: 500,
-      headers: { 'Access-Control-Allow-Origin': '*' },
+      headers: { "Access-Control-Allow-Origin": "*" },
     });
   }
 
   try {
-    const contentType = req.headers.get('content-type') || '';
+    const contentType = req.headers.get("content-type") || "";
     let providedTranscript: string | null = null;
     let audioBlob: Blob | null = null;
 
-    if (contentType.includes('application/json')) {
+    if (contentType.includes("application/json")) {
       const body = (await req.json().catch(() => null)) as { transcript?: unknown } | null;
-      if (body && typeof body.transcript === 'string' && body.transcript.trim()) {
+      if (body && typeof body.transcript === "string" && body.transcript.trim()) {
         providedTranscript = body.transcript.trim();
       }
     } else {
       const form = await req.formData();
-      const transcriptEntry = form.get('transcript');
-      if (typeof transcriptEntry === 'string' && transcriptEntry.trim()) {
+      const transcriptEntry = form.get("transcript");
+      if (typeof transcriptEntry === "string" && transcriptEntry.trim()) {
         providedTranscript = transcriptEntry.trim();
       }
-      const audioEntry = form.get('audio');
+      const audioEntry = form.get("audio");
       if (audioEntry instanceof Blob && audioEntry.size > 0) {
         audioBlob = audioEntry;
       }
     }
 
-    let transcript = providedTranscript ?? '';
+    let transcript = providedTranscript ?? "";
     if (!transcript) {
       if (!audioBlob) {
-        return new Response('Bad Request: missing audio or transcript', {
+        return new Response("Bad Request: missing audio or transcript", {
           status: 400,
-          headers: { 'Access-Control-Allow-Origin': '*' },
+          headers: { "Access-Control-Allow-Origin": "*" },
         });
       }
-      transcript = await transcribeAudio(apiKey, audioBlob);
+
+      const uploadUrl = await uploadAudioBlob(apiKey, audioBlob);
+      const transcriptId = await requestTranscript(apiKey, uploadUrl);
+      transcript = await pollTranscript(apiKey, transcriptId);
     }
 
     if (!transcript) {
-      return new Response('Transcription empty', {
+      return new Response("Transcription empty", {
         status: 422,
-        headers: { 'Access-Control-Allow-Origin': '*' },
+        headers: { "Access-Control-Allow-Origin": "*" },
       });
     }
 
-    const [conversation, plan] = await Promise.all([
-      generateConversation(apiKey, transcript),
-      generatePlan(apiKey, transcript),
-    ]);
+    const parsedPlan = parseVoiceToPlan(transcript);
+    const summary = buildSummary(parsedPlan);
 
     return new Response(
       JSON.stringify({
         transcript,
-        summary: conversation,
-        plan,
+        summary,
+        plan: {
+          add: parsedPlan.add,
+          remove: parsedPlan.remove,
+          adjust: parsedPlan.adjust,
+          raw: parsedPlan.raw,
+        },
       }),
       {
         status: 200,
         headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
         },
       },
     );
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'unknown error';
-    return new Response(`Server error: ${message}`, {
-      status: 500,
-      headers: { 'Access-Control-Allow-Origin': '*' },
-    });
+    const message = error instanceof Error ? error.message : "unknown error";
+    return new Response(`Server error: ${message}`,
+      {
+        status: 500,
+        headers: { "Access-Control-Allow-Origin": "*" },
+      });
   }
 }
-
-
-
-
-

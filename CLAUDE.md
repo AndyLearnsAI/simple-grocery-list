@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a React-based grocery list application built with Vite, TypeScript, and Tailwind CSS. The app uses Supabase for authentication and data storage, with voice assistant functionality powered by OpenAI APIs.
+This is a React-based grocery list application built with Vite, TypeScript, and Tailwind CSS. The app uses Supabase for authentication and data storage, with voice assistant functionality powered by AssemblyAI streaming transcription.
 
 ## Development Commands
 
@@ -28,11 +28,11 @@ This is a React-based grocery list application built with Vite, TypeScript, and 
 - **Voice Processing**: Two implementations:
   - `server/index.mjs`: Express server for development
   - `api/voice-intent.ts`: Vercel Edge function for production
-- **AI Integration**: OpenAI API for transcription and intent parsing
+- **AI Integration**: AssemblyAI streaming transcription with heuristic intent parsing
 
 ### Key Features
 - Drag-and-drop grocery list reordering (@dnd-kit)
-- Voice assistant with speech recognition and OpenAI integration
+- Voice assistant with speech recognition and AssemblyAI integration
 - Smart quantity parsing ("pears x4", "grapes (if good)")
 - Purchase history tracking
 - Saved lists management
@@ -49,7 +49,7 @@ Tables include grocery_lists, savedlist_items, purchase_history, and specials. M
 - `VITE_API_BASE_URL` (optional)
 
 **Backend**:
-- `OPENAI_API_KEY`
+- `ASSEMBLYAI_API_KEY`
 - `PORT` (defaults to 8787)
 
 ## Security Considerations
@@ -65,3 +65,4 @@ The codebase follows security best practices:
 ## Testing
 
 Comprehensive test suite exists in `testsprite_tests/` covering authentication, CRUD operations, UI functionality, and edge cases.
+

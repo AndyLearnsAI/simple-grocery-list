@@ -2,15 +2,16 @@ Simple grocery app
 - Saved lists
 - Purchase history
 - Weekly specials (currently Coles only)
-- Enhanced voice assistant powered by OpenAI gpt-4o models with streaming responses
+- Enhanced voice assistant powered by AssemblyAI streaming transcription with smart planning
 
 ## Setup
 
 ### Environment Variables
 Create a `.env` file in the root directory with:
 ```
-OPENAI_API_KEY=your_openai_api_key_here
+ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
 ```
 
-Get your OpenAI API key from [platform.openai.com](https://platform.openai.com/api-keys)
+Get your AssemblyAI API key from [assemblyai.com](https://www.assemblyai.com/dashboard/activation?product=streaming)
+
 
