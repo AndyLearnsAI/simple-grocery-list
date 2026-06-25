@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Edit3, Trash2, Link } from "lucide-react";
+import { Edit3, Trash2, Link, Check } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 
 interface ItemDetailModalProps {
@@ -21,6 +21,7 @@ interface ItemDetailModalProps {
     discount_percentage?: string | null;
     notes?: string | null;
     link?: string | null;
+    buy_later?: boolean;
   };
   tableName: 'Grocery list' | 'SavedlistItems';
   onUpdate: () => void;
@@ -34,6 +35,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
   const [notes, setNotes] = useState(item.notes || "");
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(item.Item);
+  const [buyLater, setBuyLater] = useState(!!item.buy_later);
   const nameInputRef = useRef<HTMLInputElement | null>(null);
   const { toast } = useToast();
 
@@ -45,6 +47,7 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
     setNotes(item.notes || "");
     setNameValue(item.Item);
     setIsEditingName(false);
+    setBuyLater(!!item.buy_later);
   }, [item]);
 
   useEffect(() => {
@@ -239,6 +242,27 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
     }
   };
 
+  const handleToggleBuyLater = async () => {
+    const next = !buyLater;
+    setBuyLater(next);
+    try {
+      const { error } = await supabase
+        .from('Grocery list')
+        .update({ buy_later: next })
+        .eq('id', item.id);
+      if (error) throw error;
+      toast({
+        title: next ? "Moved to Buy Later" : "Moved to list",
+        description: `${item.Item} ${next ? "added to Buy Later" : "moved back to your list"}.`,
+      });
+      onUpdate();
+    } catch (e) {
+      setBuyLater(!next);
+      const message = e instanceof Error ? e.message : 'Failed to update Buy Later';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -425,6 +449,17 @@ export function ItemDetailModal({ isOpen, onClose, item, tableName, onUpdate }: 
         
         {/* Action Buttons */}
         <div className="flex gap-2 justify-end mt-4">
+          {tableName === 'Grocery list' && (
+            <Button
+              variant={buyLater ? "default" : "outline"}
+              onClick={handleToggleBuyLater}
+              className={`gap-2 mr-auto ${buyLater ? "bg-green-500 hover:bg-green-600 text-white" : ""}`}
+              title={buyLater ? "Remove from Buy Later" : "Move to Buy Later"}
+            >
+              {buyLater && <Check className="h-4 w-4" />}
+              Buy Later
+            </Button>
+          )}
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button variant="destructive" onClick={handleDelete} className="gap-2"><Trash2 className="h-4 w-4" /> Delete</Button>
           <Button onClick={handleUpdate}>Update</Button>
