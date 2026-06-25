@@ -271,7 +271,7 @@ function TouchSortableGroceryItem({
             <button
               type="button"
               onClick={() => setIsQuantityEditing(true)}
-              className="font-medium text-sm text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2"
+              className="font-medium text-base text-muted-foreground px-2 py-1 rounded hover:bg-muted/40 transition pr-2"
               title="Edit quantity"
             >
               {item.Quantity}
@@ -367,14 +367,14 @@ function TouchSortableGroceryItem({
                       setNameValue(item.Item);
                     }
                   }}
-                  className="h-7 text-sm"
+                  className="h-8 text-base"
                   maxLength={99}
                   autoFocus
                 />
               ) : (
                 <button
                   type="button"
-                  className={`font-medium text-left text-sm break-words ${item.checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}
+                  className={`font-medium text-left text-base break-words ${item.checked ? 'line-through text-muted-foreground' : 'text-foreground'}`}
                   onClick={() => setIsEditingName(true)}
                   title="Edit name"
                 >
