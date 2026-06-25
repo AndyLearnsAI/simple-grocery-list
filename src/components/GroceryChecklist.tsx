@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from "react";
-import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, FileText, Tag } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, Trash2, Plus, Minus, Undo2, ShoppingCart, GripVertical, ChevronsUpDown, ArrowUpDown, Search, X, ArrowDown, ArrowUp, Tag } from "lucide-react";
 import { ToastAction } from "@/components/ui/toast";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
@@ -50,6 +48,7 @@ function TouchSortableGroceryItem({
   onRemove, 
   onReorder,
   onImageClick,
+  onToggleBuyLater,
   index,
   totalItems,
   dragDestination,
@@ -61,6 +60,7 @@ function TouchSortableGroceryItem({
   onRemove: (id: number) => void;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onImageClick: (item: GroceryItem) => void;
+  onToggleBuyLater: (id: number) => void;
   index: number;
   totalItems: number;
   dragDestination: number | null;
@@ -74,8 +74,6 @@ function TouchSortableGroceryItem({
   const [editQuantity, setEditQuantity] = useState(item.Quantity || 1);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameValue, setNameValue] = useState(item.Item);
-  const [notesOpen, setNotesOpen] = useState(false);
-  const [notesValue, setNotesValue] = useState(item.notes || "");
   const itemRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<HTMLDivElement>(null);
   const editQuantityRef = useRef<HTMLInputElement>(null);
@@ -383,53 +381,27 @@ function TouchSortableGroceryItem({
                   {item.Item}
                 </button>
               )}
-              {/* moved note icon to far right */}
             </div>
+            {item.notes && item.notes.trim() && (
+              <p className="text-xs text-muted-foreground break-words mt-0.5">{item.notes}</p>
+            )}
           </div>
         </div>
-        {/* Far right: note icon (editor popover) */}
+        {/* Far right: move to / from Buy Later */}
         <div className="flex items-center gap-2">
-          <Popover open={notesOpen} onOpenChange={setNotesOpen}>
-            <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-6 w-6 p-0 mr-2"
-                title={((notesValue || item.notes || "").trim()) ? 'Edit note' : 'Add note'}
-              >
-                <FileText className={`h-3 w-3 ${((notesValue || item.notes || "").trim()) ? 'text-green-600' : 'text-muted-foreground/40'}`} />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent side="top" align="end" className="w-72">
-              <div className="space-y-2">
-                <Textarea
-                  value={notesValue}
-                  onChange={(e) => setNotesValue(e.target.value)}
-                  placeholder="Add a note…"
-                />
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" size="sm" onClick={() => { setNotesValue(item.notes || ""); setNotesOpen(false); }}>Cancel</Button>
-                  <Button
-                    size="sm"
-                    onClick={async () => {
-                      try {
-                        const { error } = await supabase
-                          .from('Grocery list')
-                          .update({ notes: notesValue.trim() ? notesValue.trim() : null })
-                          .eq('id', item.id);
-                        if (error) throw error;
-                        setNotesOpen(false);
-                      } catch (e) {
-                        toast({ title: 'Error', description: 'Failed to save note', variant: 'destructive' });
-                      }
-                    }}
-                  >
-                    Save
-                  </Button>
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 mr-2"
+            onClick={() => onToggleBuyLater(item.id)}
+            title={item.buy_later ? 'Move back to list' : 'Move to Buy Later'}
+          >
+            {item.buy_later ? (
+              <ArrowUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ArrowDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </Button>
         </div>
       </div>
     </Card>
@@ -564,6 +536,27 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
           i.id === id ? { ...i, checked: !i.checked } : i
         )
       );
+    }
+  };
+
+  const toggleBuyLater = async (id: number) => {
+    const item = items.find(i => i.id === id);
+    if (!item) return;
+    const next = !item.buy_later;
+    setItems(prev => prev.map(i => (i.id === id ? { ...i, buy_later: next } : i)));
+    try {
+      const { error } = await supabase
+        .from('Grocery list')
+        .update({ buy_later: next })
+        .eq('id', id);
+      if (error) throw error;
+    } catch (error) {
+      setItems(prev => prev.map(i => (i.id === id ? { ...i, buy_later: !next } : i)));
+      toast({
+        title: "Error",
+        description: "Failed to update Buy Later status",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1443,6 +1436,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 onRemove={removeItem}
                 onReorder={(from, to) => handleReorder(defaultItems, from, to)}
                 onImageClick={() => setDetailModalItem(item)}
+                onToggleBuyLater={toggleBuyLater}
                 index={index}
                 totalItems={defaultItems.length}
                 dragDestination={dragDestination}
@@ -1472,6 +1466,7 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                     onRemove={removeItem}
                     onReorder={(from, to) => handleReorder(buyLaterItems, from, to)}
                     onImageClick={() => setDetailModalItem(item)}
+                    onToggleBuyLater={toggleBuyLater}
                     index={index}
                     totalItems={buyLaterItems.length}
                     dragDestination={dragDestination}
