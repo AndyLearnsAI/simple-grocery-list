@@ -938,6 +938,12 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
               Quantity: itemToUndo.Quantity || 1,
               user_id: user.data.user.id,
               img: itemToUndo.img,
+              notes: itemToUndo.notes ?? null,
+              price: itemToUndo.price ?? null,
+              discount: itemToUndo.discount ?? null,
+              discount_percentage: itemToUndo.discount_percentage ?? null,
+              link: itemToUndo.link ?? null,
+              buy_later: itemToUndo.buy_later ?? false,
               order: newOrder
             }])
             .select()
