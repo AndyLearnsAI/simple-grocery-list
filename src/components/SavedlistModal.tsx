@@ -423,7 +423,7 @@ function TouchSortableSavedlistItem({
                   variant="ghost"
                   size="sm"
                   onClick={handleEditStart}
-                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 leading-tight"
+                  className="h-auto p-0 text-left font-medium text-sm text-foreground hover:bg-transparent w-full justify-start min-w-0 leading-normal"
                 >
                   <span className="break-words whitespace-normal text-left block w-full">{item.Item}</span>
                 </Button>
