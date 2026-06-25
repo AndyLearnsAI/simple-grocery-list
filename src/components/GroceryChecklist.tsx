@@ -30,6 +30,7 @@ interface GroceryItem {
   img?: string | null;
   link?: string | null;
   order: number;
+  buy_later?: boolean;
 }
 
 interface DeletedItem extends GroceryItem {
@@ -491,12 +492,17 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
     }
   };
 
-  const reorderItems = async (fromIndex: number, toIndex: number) => {
+  const handleReorder = async (sectionItems: GroceryItem[], fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex) return;
     try {
-      const newItems = [...items];
-      const [movedItem] = newItems.splice(fromIndex, 1);
-      newItems.splice(toIndex, 0, movedItem);
+      const reordered = [...sectionItems];
+      const [movedItem] = reordered.splice(fromIndex, 1);
+      reordered.splice(toIndex, 0, movedItem);
+      // Replace this section's slots inside the full items array in place,
+      // leaving the other section's items where they are, then renumber order.
+      const sectionIds = new Set(sectionItems.map(i => i.id));
+      let pointer = 0;
+      const newItems = items.map(it => (sectionIds.has(it.id) ? reordered[pointer++] : it));
       const updatedItems = newItems.map((item, index) => ({
         ...item,
         order: index + 1
@@ -1336,6 +1342,8 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
   const filteredItems = items.filter(item =>
     item.Item.toLowerCase().includes(searchTerm.toLowerCase())
   );
+  const defaultItems = filteredItems.filter(item => !item.buy_later);
+  const buyLaterItems = filteredItems.filter(item => item.buy_later);
 
   if (loading) {
     return (
@@ -1426,25 +1434,25 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
           </div>
           )}
           <div className={`space-y-0 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
-            {filteredItems.map((item, index) => (
+            {defaultItems.map((item, index) => (
               <TouchSortableGroceryItem
                 key={item.id}
                 item={item}
                 onToggle={toggleItem}
                 onUpdateQuantity={updateQuantity}
                 onRemove={removeItem}
-                onReorder={reorderItems}
+                onReorder={(from, to) => handleReorder(defaultItems, from, to)}
                 onImageClick={() => setDetailModalItem(item)}
                 index={index}
-                totalItems={filteredItems.length}
+                totalItems={defaultItems.length}
                 dragDestination={dragDestination}
                 onDragDestinationChange={setDragDestination}
               />
             ))}
-            {filteredItems.length === 0 && (
+            {defaultItems.length === 0 && (
               <div className="p-6 text-center">
                 <div className="text-muted-foreground">
-                  {searchTerm 
+                  {searchTerm
                     ? `No items found matching "${searchTerm}". Try a different search term.`
                     : "Your grocery list is empty. Add some items to get started!"
                   }
@@ -1469,6 +1477,33 @@ export const GroceryChecklist = forwardRef<GroceryChecklistHandle, Record<string
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+          </div>
+        </div>
+      </Card>
+      <Card className="px-0 py-4 shadow-card">
+        <div className="space-y-0 px-4">
+          <h3 className="text-sm font-semibold text-muted-foreground mb-2">Buy Later</h3>
+          <div className={`space-y-0 ${isSorting ? 'blur-sm pointer-events-none' : ''}`}>
+            {buyLaterItems.map((item, index) => (
+              <TouchSortableGroceryItem
+                key={item.id}
+                item={item}
+                onToggle={toggleItem}
+                onUpdateQuantity={updateQuantity}
+                onRemove={removeItem}
+                onReorder={(from, to) => handleReorder(buyLaterItems, from, to)}
+                onImageClick={() => setDetailModalItem(item)}
+                index={index}
+                totalItems={buyLaterItems.length}
+                dragDestination={dragDestination}
+                onDragDestinationChange={setDragDestination}
+              />
+            ))}
+            {buyLaterItems.length === 0 && (
+              <div className="py-4 text-center">
+                <div className="text-sm text-muted-foreground">Nothing here yet</div>
+              </div>
+            )}
           </div>
         </div>
       </Card>
